@@ -1,16 +1,21 @@
-import { useState, useEffect, useMemo } from 'react'
-import Cart from './Cart'
-import type { CartItem } from './Cart'
-import { getErrorMsg } from '../hooks/useApi'
+import { useState, useMemo, useEffect } from 'react'
 
 interface CashierProps {
   user: User
 }
 
+interface CartItem {
+  product: Product
+  quantity: number
+}
+
 export default function Cashier({ user }: CashierProps) {
   const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState('')
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
+  const [editingItem, setEditingItem] = useState<CartItem | null>(null)
+  const [editQty, setEditQty] = useState(1)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
@@ -18,162 +23,186 @@ export default function Cashier({ user }: CashierProps) {
     window.api.getProducts().then(setProducts)
   }, [])
 
-  // Filtrer produits par recherche
-  const filtered = useMemo(() => {
-    if (!search.trim()) return products
+  const results = useMemo(() => {
+    if (!search.trim()) return []
     const q = search.toLowerCase()
     return products.filter((p) => p.name.toLowerCase().includes(q))
   }, [products, search])
 
-  // Ajouter au panier avec fenêtre quantité
-  const [qtyModal, setQtyModal] = useState<{ product: Product } | null>(null)
-  const [qtyValue, setQtyValue] = useState(1)
-
-  const openQtyModal = (product: Product) => {
-    setQtyValue(1)
-    setQtyModal({ product })
-  }
-
-  const confirmQty = () => {
-    if (!qtyModal) return
-    const { product } = qtyModal
-    const qty = Math.max(1, qtyValue)
-
-    setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id)
-      if (existing) {
-        return prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + qty } : i
-        )
-      }
-      return [...prev, { product, quantity: qty }]
-    })
-
-    setQtyModal(null)
-  }
-
-  const updateQuantity = (productId: number, delta: number) => {
-    setCart((prev) =>
-      prev.map((i) =>
-        i.product.id === productId
-          ? { ...i, quantity: Math.max(1, i.quantity + delta) }
-          : i
-      )
-    )
-  }
-
-  const removeFromCart = (productId: number) => {
-    setCart((prev) => prev.filter((i) => i.product.id !== productId))
-  }
-
-  const clearCart = () => setCart([])
+  const total = useMemo(
+    () => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    [cart]
+  )
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg })
     setTimeout(() => setToast(null), 3000)
   }
 
-  const handleCheckout = async () => {
+  const handleAdd = () => {
+    if (selectedId === null) return
+    const product = products.find((p) => p.id === selectedId)
+    if (!product) return
+
+    setCart((prev) => {
+      const existing = prev.find((i) => i.product.id === product.id)
+      if (existing) {
+        return prev.map((i) =>
+          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+        )
+      }
+      return [...prev, { product, quantity: 1 }]
+    })
+
+    setSearch('')
+    setSelectedId(null)
+  }
+
+  const handleSaveEdit = () => {
+    if (!editingItem) return
+    setCart((prev) =>
+      prev.map((i) =>
+        i.product.id === editingItem.product.id ? { ...i, quantity: editQty } : i
+      )
+    )
+    setEditingItem(null)
+  }
+
+  const handleDeleteRow = () => {
+    if (!editingItem) return
+    setCart((prev) => prev.filter((i) => i.product.id !== editingItem.product.id))
+    setEditingItem(null)
+  }
+
+  const handleValidate = async () => {
     if (cart.length === 0) return
     setLoading(true)
     try {
-      const items = cart.map((i) => ({
-        productId: i.product.id,
-        quantity: i.quantity,
-        unitPrice: i.product.price
-      }))
-      const result = await window.api.createSale(items, user.username)
-      showToast('success', `✅ Vente validée — ${result.total.toLocaleString()} Ar`)
+      await window.api.createSale(
+        cart.map((i) => ({
+          productId: i.product.id,
+          quantity: i.quantity,
+          unitPrice: i.product.price
+        })),
+        user.username
+      )
+      showToast('success', 'Vente enregistrée')
       setCart([])
-      // Recharger les stocks
-      const updated = await window.api.getProducts()
-      setProducts(updated)
     } catch (err) {
-      showToast('error', getErrorMsg(err, 'Erreur lors de la vente'))
+      showToast('error', err instanceof Error ? err.message : 'Erreur lors de la vente')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <>
-      <div style={{ padding: '10px 0' }}>
-        <input
-          className="search-bar"
-          type="text"
-          placeholder="🔍 Rechercher un produit..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          autoFocus
-        />
-      </div>
+    <div className="cashier-layout">
+      <div className="cashier-table-panel">
+        <table className="cashier-table">
+          <thead>
+            <tr>
+              <th>Produit</th>
+              <th>Prix unitaire</th>
+              <th>Quantité</th>
+              <th>Prix</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cart.map((item) => (
+              <tr
+                key={item.product.id}
+                onClick={() => {
+                  setEditingItem(item)
+                  setEditQty(item.quantity)
+                }}
+              >
+                <td>{item.product.name}</td>
+                <td>{item.product.price.toLocaleString()} Ar</td>
+                <td>{item.quantity}</td>
+                <td>{(item.product.price * item.quantity).toLocaleString()} Ar</td>
+              </tr>
+            ))}
+            {cart.length === 0 && (
+              <tr>
+                <td colSpan={4} className="empty-row">Aucun produit ajouté</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
 
-      <div className="cashier-layout">
-        <div className="products-grid">
-          {filtered.map((product) => (
-            <div
-              key={product.id}
-              className="product-card"
-              onClick={() => {
-                if (product.quantity <= 0) return
-                openQtyModal(product)
-              }}
-              style={{ opacity: product.quantity <= 0 ? 0.4 : 1 }}
-            >
-              <div className="name">{product.name}</div>
-              <div className="price">{product.price.toLocaleString()} Ar</div>
-              <div className={`stock ${product.quantity <= 0 ? 'out' : product.quantity < 5 ? 'low' : ''}`}>
-                {product.quantity <= 0 ? 'Rupture' : `Stock: ${product.quantity}`}
-              </div>
-            </div>
-          ))}
-          {filtered.length === 0 && (
-            <div style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-secondary)', padding: 40 }}>
-              Aucun produit trouvé
-            </div>
-          )}
+        <div className="cashier-total-row">
+          <span>TOTAL</span>
+          <span>{total.toLocaleString()} Ar</span>
         </div>
 
-        <Cart
-          items={cart}
-          onUpdateQuantity={updateQuantity}
-          onRemove={removeFromCart}
-          onClear={clearCart}
-          onCheckout={handleCheckout}
-          loading={loading}
-        />
+        <button
+          className="btn-validate"
+          onClick={handleValidate}
+          disabled={cart.length === 0 || loading}
+        >
+          {loading ? 'Validation...' : 'Valider la vente'}
+        </button>
       </div>
 
-      {/* Modal quantité */}
-      {qtyModal && (
-        <div className="modal-overlay" onClick={() => setQtyModal(null)}>
-          <div className="modal qty-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{qtyModal.product.name}</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>
-              Prix unitaire : {qtyModal.product.price.toLocaleString()} Ar
-            </p>
-            <div className="qty-display">{qtyValue}</div>
-            <div className="qty-buttons">
-              <button onClick={() => setQtyValue(Math.max(1, qtyValue - 1))}>−</button>
-              <button onClick={() => setQtyValue(qtyValue + 1)}>+</button>
-            </div>
-            <div className="qty-presets">
-              {[1, 2, 3, 5, 10, 15, 20, 25].map((n) => (
-                <button key={n} onClick={() => setQtyValue(n)}>{n}</button>
-              ))}
+      <div className="cashier-search-panel">
+        <div className="search-bar-wrapper">
+          <svg className="search-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M21 21L16.5 16.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setSelectedId(null)
+            }}
+            placeholder="Rechercher un produit..."
+          />
+        </div>
+
+        {results.length > 0 && (
+          <div className="search-results">
+            {results.map((p) => (
+              <div
+                key={p.id}
+                className={`search-result-row ${selectedId === p.id ? 'selected' : ''}`}
+                onClick={() => setSelectedId(p.id)}
+              >
+                <span>{p.name}</span>
+                <span>{p.price.toLocaleString()} Ar</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button className="btn-add-product" onClick={handleAdd} disabled={selectedId === null}>
+          AJOUTER
+        </button>
+      </div>
+
+      {editingItem && (
+        <div className="modal-overlay" onClick={() => setEditingItem(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{editingItem.product.name}</h3>
+            <div className="form-group">
+              <label>Quantité</label>
+              <input
+                type="number"
+                min={1}
+                value={editQty}
+                onChange={(e) => setEditQty(Math.max(1, Number(e.target.value)))}
+              />
             </div>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setQtyModal(null)}>Annuler</button>
-              <button className="btn-primary" onClick={confirmQty}>
-                Ajouter — {(qtyModal.product.price * qtyValue).toLocaleString()} Ar
-              </button>
+              <button className="btn-secondary" onClick={handleSaveEdit}>Modifier</button>
+              <button className="btn-delete" onClick={handleDeleteRow}>Supprimer</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Toast */}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
-    </>
+    </div>
   )
 }
