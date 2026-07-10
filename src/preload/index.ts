@@ -1,23 +1,67 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
   login: (username: string, password: string) =>
-    ipcRenderer.invoke('auth:login', {username, password}),
-  getProducts: () => ipcRenderer.invoke('products:getAll'),
-  addProduct: (data: { name: string; price: number; quantity: number }) =>
-    ipcRenderer.invoke('products:add', data),
-  updateProduct: (data: { id: number; name: string; price: number }) =>
-    ipcRenderer.invoke('products:update', data),
-  updateStock: (id: number, quantity: number) =>
-    ipcRenderer.invoke('products:updateStock', { id, quantity }),
-  deleteProduct: (id: number) =>
-    ipcRenderer.invoke('products:delete', id),
+    ipcRenderer.invoke('auth:login', { username, password }),
+  signup: (username: string, password: string) =>
+    ipcRenderer.invoke('auth:signup', { username, password }),
+  getUsers: () => ipcRenderer.invoke('users:getAll'),
+  deleteUser: (id: number) => ipcRenderer.invoke('users:delete', id),
 
-  createSale: (items: { productId: number; quantity: number; unitPrice: number }[], cashier?: string) =>
-    ipcRenderer.invoke('sales:create', { items, cashier }),
+  getProducts: () => ipcRenderer.invoke('products:getAll'),
+  addProduct: (data: {
+    name: string
+    price: number
+    famille_id?: number
+    stock_boutique?: number
+    stock_entrepot?: number
+    code_barre?: string
+  }) => ipcRenderer.invoke('products:add', data),
+  updateProduct: (data: {
+    id: number
+    name: string
+    price: number
+    famille_id?: number
+    stock_boutique?: number
+    stock_entrepot?: number
+    code_barre?: string
+  }) => ipcRenderer.invoke('products:update', data),
+  updateStock: (id: number, stock_boutique: number, stock_entrepot: number) =>
+    ipcRenderer.invoke('products:updateStock', { id, stock_boutique, stock_entrepot }),
+  transferStock: (id: number, quantity: number) =>
+    ipcRenderer.invoke('products:transferStock', { id, quantity }),
+  deleteProduct: (id: number) => ipcRenderer.invoke('products:delete', id),
+
+  getCategories: () => ipcRenderer.invoke('categories:getAll'),
+  addCategory: (nom: string) => ipcRenderer.invoke('categories:add', { nom }),
+  updateCategory: (id: number, nom: string) => ipcRenderer.invoke('categories:update', { id, nom }),
+  deleteCategory: (id: number) => ipcRenderer.invoke('categories:delete', id),
+
+  getClients: () => ipcRenderer.invoke('clients:getAll'),
+  addClient: (nom: string) => ipcRenderer.invoke('clients:add', { nom }),
+  updateClient: (id: number, nom: string) => ipcRenderer.invoke('clients:update', { id, nom }),
+  deleteClient: (id: number) => ipcRenderer.invoke('clients:delete', id),
+
+  getFournisseurs: () => ipcRenderer.invoke('fournisseurs:getAll'),
+  addFournisseur: (data: { nom: string; telephone?: string; adresse?: string }) =>
+    ipcRenderer.invoke('fournisseurs:add', data),
+  updateFournisseur: (data: { id: number; nom: string; telephone?: string; adresse?: string }) =>
+    ipcRenderer.invoke('fournisseurs:update', data),
+  deleteFournisseur: (id: number) => ipcRenderer.invoke('fournisseurs:delete', id),
+  getFournisseurProduits: (fournisseurId: number) =>
+    ipcRenderer.invoke('fournisseur-produits:getByFournisseur', fournisseurId),
+  syncFournisseurProduits: (fournisseurId: number, produitIds: number[]) =>
+    ipcRenderer.invoke('fournisseur-produits:sync', { fournisseurId, produitIds }),
+
+  createSale: (
+    items: { productId: number; quantity: number; unitPrice: number }[],
+    cashier?: string,
+    clientId?: number
+  ) => ipcRenderer.invoke('sales:create', { items, cashier, clientId }),
   getSales: () => ipcRenderer.invoke('sales:getAll'),
   getTodaySales: () => ipcRenderer.invoke('sales:getToday'),
   openTicketsFolder: () => ipcRenderer.invoke('tickets:open'),
+
   resetDatabase: () => ipcRenderer.invoke('db:reset')
 }
 

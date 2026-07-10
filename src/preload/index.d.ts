@@ -2,7 +2,12 @@ interface Product {
   id: number
   name: string
   price: number
-  quantity: number
+  famille_id: number | null
+  famille_nom: string | null
+  photo: string | null
+  code_barre: string | null
+  stock_boutique: number
+  stock_entrepot: number
   created_at: string
 }
 
@@ -21,19 +26,110 @@ interface SaleItem {
 interface Sale {
   id: number
   total: number
+  benefice: number
   created_at: string
   cashier: string
+  client_id: number | null
+  client_nom: string | null
   items: SaleItem[]
+}
+
+interface Famille {
+  id: number
+  nom: string
+}
+
+interface Client {
+  id: number
+  nom: string
+}
+
+interface Fournisseur {
+  id: number
+  nom: string
+  telephone: string | null
+  adresse: string | null
+}
+
+interface FournisseurProduit {
+  id: number
+  produit_id: number
+  produit_nom: string
+}
+
+interface Journalier {
+  id: number
+  date: string
+  total_ventes: number
+  benefice: number
 }
 
 interface CashierAPI {
   login(username: string, password: string): Promise<User>
+  signup(username: string, password: string): Promise<{ lastInsertRowid: number }>
+  getUsers(): Promise<User[]>
+  deleteUser(id: number): Promise<{ success: boolean }>
+
   getProducts(): Promise<Product[]>
-  addProduct(data: { name: string; price: number; quantity: number }): Promise<{ lastInsertRowid: number }>
-  updateProduct(data: { id: number; name: string; price: number }): Promise<{ changes: number }>
-  updateStock(id: number, quantity: number): Promise<{ changes: number }>
+  addProduct(data: {
+    name: string
+    price: number
+    famille_id?: number
+    stock_boutique?: number
+    stock_entrepot?: number
+    code_barre?: string
+  }): Promise<{ lastInsertRowid: number }>
+  updateProduct(data: {
+    id: number
+    name: string
+    price: number
+    famille_id?: number
+    stock_boutique?: number
+    stock_entrepot?: number
+    code_barre?: string
+  }): Promise<{ changes: number }>
+  updateStock(
+    id: number,
+    stock_boutique: number,
+    stock_entrepot: number
+  ): Promise<{ changes: number }>
+  transferStock(id: number, quantity: number): Promise<{ success: boolean }>
   deleteProduct(id: number): Promise<{ changes: number }>
-  createSale(items: { productId: number; quantity: number; unitPrice: number }[], cashier?: string): Promise<{ saleId: number; total: number }>
+
+  getCategories(): Promise<Famille[]>
+  addCategory(nom: string): Promise<{ lastInsertRowid: number }>
+  updateCategory(id: number, nom: string): Promise<{ changes: number }>
+  deleteCategory(id: number): Promise<{ success: boolean }>
+
+  getClients(): Promise<Client[]>
+  addClient(nom: string): Promise<{ lastInsertRowid: number }>
+  updateClient(id: number, nom: string): Promise<{ changes: number }>
+  deleteClient(id: number): Promise<{ success: boolean }>
+
+  getFournisseurs(): Promise<Fournisseur[]>
+  addFournisseur(data: {
+    nom: string
+    telephone?: string
+    adresse?: string
+  }): Promise<{ lastInsertRowid: number }>
+  updateFournisseur(data: {
+    id: number
+    nom: string
+    telephone?: string
+    adresse?: string
+  }): Promise<{ changes: number }>
+  deleteFournisseur(id: number): Promise<{ success: boolean }>
+  getFournisseurProduits(fournisseurId: number): Promise<FournisseurProduit[]>
+  syncFournisseurProduits(
+    fournisseurId: number,
+    produitIds: number[]
+  ): Promise<{ success: boolean }>
+
+  createSale(
+    items: { productId: number; quantity: number; unitPrice: number }[],
+    cashier?: string,
+    clientId?: number
+  ): Promise<{ saleId: number; total: number }>
   getSales(): Promise<Sale[]>
   getTodaySales(): Promise<Sale[]>
   openTicketsFolder(): Promise<void>

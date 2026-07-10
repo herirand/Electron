@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { getErrorMsg } from '../hooks/useApi'
 
 interface CashierProps {
   user: User
@@ -11,6 +12,8 @@ interface CartItem {
 
 export default function Cashier({ user }: CashierProps) {
   const [products, setProducts] = useState<Product[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -21,6 +24,7 @@ export default function Cashier({ user }: CashierProps) {
 
   useEffect(() => {
     window.api.getProducts().then(setProducts)
+    window.api.getClients().then(setClients)
   }, [])
 
   const results = useMemo(() => {
@@ -61,9 +65,7 @@ export default function Cashier({ user }: CashierProps) {
   const handleSaveEdit = () => {
     if (!editingItem) return
     setCart((prev) =>
-      prev.map((i) =>
-        i.product.id === editingItem.product.id ? { ...i, quantity: editQty } : i
-      )
+      prev.map((i) => (i.product.id === editingItem.product.id ? { ...i, quantity: editQty } : i))
     )
     setEditingItem(null)
   }
@@ -84,12 +86,14 @@ export default function Cashier({ user }: CashierProps) {
           quantity: i.quantity,
           unitPrice: i.product.price
         })),
-        user.username
+        user.username,
+        selectedClientId || undefined
       )
-      showToast('success', 'Vente enregistrée')
+      showToast('success', 'Vente enregistree')
       setCart([])
+      setSelectedClientId(null)
     } catch (err) {
-      showToast('error', err instanceof Error ? err.message : 'Erreur lors de la vente')
+      showToast('error', getErrorMsg(err, 'Erreur lors de la vente'))
     } finally {
       setLoading(false)
     }
@@ -103,7 +107,7 @@ export default function Cashier({ user }: CashierProps) {
             <tr>
               <th>Produit</th>
               <th>Prix unitaire</th>
-              <th>Quantité</th>
+              <th>Quantite</th>
               <th>Prix</th>
             </tr>
           </thead>
@@ -124,15 +128,36 @@ export default function Cashier({ user }: CashierProps) {
             ))}
             {cart.length === 0 && (
               <tr>
-                <td colSpan={4} className="empty-row">Aucun produit ajouté</td>
+                <td colSpan={4} className="empty-row">
+                  Aucun produit ajoute
+                </td>
               </tr>
             )}
           </tbody>
         </table>
 
-        <div className="cashier-total-row">
-          <span>TOTAL</span>
-          <span>{total.toLocaleString()} Ar</span>
+        <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
+          <div className="cashier-total-row" style={{ flex: 1, marginTop: 0 }}>
+            <span>TOTAL</span>
+            <span>{total.toLocaleString()} Ar</span>
+          </div>
+          {clients.length > 0 && (
+            <div style={{ flex: 1 }}>
+              <select
+                className="search-bar-wrapper"
+                value={selectedClientId || ''}
+                onChange={(e) => setSelectedClientId(Number(e.target.value) || null)}
+                style={{ width: '100%', padding: '14px 16px', fontSize: 14 }}
+              >
+                <option value="">Client (optionnel)</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <button
@@ -148,7 +173,12 @@ export default function Cashier({ user }: CashierProps) {
         <div className="search-bar-wrapper">
           <svg className="search-icon" viewBox="0 0 24 24" fill="none">
             <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-            <path d="M21 21L16.5 16.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <path
+              d="M21 21L16.5 16.5"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
           </svg>
           <input
             type="text"
@@ -186,7 +216,7 @@ export default function Cashier({ user }: CashierProps) {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>{editingItem.product.name}</h3>
             <div className="form-group">
-              <label>Quantité</label>
+              <label>Quantite</label>
               <input
                 type="number"
                 min={1}
@@ -195,8 +225,12 @@ export default function Cashier({ user }: CashierProps) {
               />
             </div>
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={handleSaveEdit}>Modifier</button>
-              <button className="btn-delete" onClick={handleDeleteRow}>Supprimer</button>
+              <button className="btn-secondary" onClick={handleSaveEdit}>
+                Modifier
+              </button>
+              <button className="btn-delete" onClick={handleDeleteRow}>
+                Supprimer
+              </button>
             </div>
           </div>
         </div>

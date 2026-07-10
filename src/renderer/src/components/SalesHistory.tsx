@@ -20,7 +20,8 @@ export default function SalesHistory() {
       <div className="admin-header">
         <h2>📊 Historique des ventes</h2>
         <div style={{ fontSize: 18 }}>
-          Total général : <strong style={{ color: 'var(--accent)' }}>{totalAll.toLocaleString()} Ar</strong>
+          Total général :{' '}
+          <strong style={{ color: 'var(--accent)' }}>{totalAll.toLocaleString()} Ar</strong>
         </div>
       </div>
 
@@ -40,12 +41,13 @@ export default function SalesHistory() {
             </div>
             <div className="sale-total">{sale.total.toLocaleString()} Ar</div>
             <div className="sale-items">
-              {Array.isArray(sale.items) && sale.items.filter(Boolean).map((item, i) => (
-                <span key={i}>
-                  {item.name} × {item.quantity} ({item.unit_price.toLocaleString()} Ar)
-                  {i < sale.items.length - 1 ? ' | ' : ''}
-                </span>
-              ))}
+              {Array.isArray(sale.items) &&
+                sale.items.filter(Boolean).map((item, i) => (
+                  <span key={i}>
+                    {item.name} × {item.quantity} ({item.unit_price.toLocaleString()} Ar)
+                    {i < sale.items.length - 1 ? ' | ' : ''}
+                  </span>
+                ))}
             </div>
           </div>
         ))}
