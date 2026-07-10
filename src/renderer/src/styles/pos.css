@@ -17,7 +17,13 @@
 }
 
 body {
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    'Outfit',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   overflow: hidden;
@@ -188,7 +194,10 @@ body {
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(61, 90, 128, 0.35);
-  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s,
+    transform 0.1s;
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -606,4 +615,44 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
+}
+
+/* ─── ADMIN TABS ─── */
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.admin-tab {
+  padding: 10px 22px;
+  border: 1.5px solid var(--border);
+  border-radius: 30px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+  transition: all 0.15s;
+}
+.admin-tab:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.admin-tab.active {
+  background: var(--brand-yellow);
+}
+.role-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.role-badge.role-admin {
+  background: rgba(245, 183, 49, 0.2);
+  color: #b8860b;
+}
+.role-badge.role-cashier {
+  background: rgba(46, 204, 113, 0.15);
+  color: #27ae60;
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getErrorMsg } from '../hooks/useApi'
 
 interface ProductFormProps {
@@ -10,11 +10,19 @@ interface ProductFormProps {
 export default function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
   const [name, setName] = useState(product?.name || '')
   const [price, setPrice] = useState(String(product?.price || ''))
-  const [quantity, setQuantity] = useState(String(product?.quantity || ''))
+  const [familleId, setFamilleId] = useState<number | ''>(product?.famille_id || '')
+  const [stockBoutique, setStockBoutique] = useState(String(product?.stock_boutique || '0'))
+  const [stockEntrepot, setStockEntrepot] = useState(String(product?.stock_entrepot || '0'))
+  const [codeBarre, setCodeBarre] = useState(product?.code_barre || '')
+  const [familles, setFamilles] = useState<Famille[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const isEdit = !!product
+
+  useEffect(() => {
+    window.api.getCategories().then(setFamilles)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,17 +31,24 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
 
     try {
       const priceNum = parseFloat(price)
-      const qtyNum = parseInt(quantity) || 0
+      const sbNum = parseInt(stockBoutique) || 0
+      const seNum = parseInt(stockEntrepot) || 0
       if (!name.trim()) throw new Error('Le nom est requis')
       if (isNaN(priceNum) || priceNum <= 0) throw new Error('Le prix doit être un nombre positif')
 
+      const data = {
+        name: name.trim(),
+        price: priceNum,
+        famille_id: familleId || undefined,
+        stock_boutique: sbNum,
+        stock_entrepot: seNum,
+        code_barre: codeBarre || undefined
+      }
+
       if (isEdit && product) {
-        await window.api.updateProduct({ id: product.id, name: name.trim(), price: priceNum })
-        if (qtyNum !== product.quantity) {
-          await window.api.updateStock(product.id, qtyNum)
-        }
+        await window.api.updateProduct({ id: product.id, ...data })
       } else {
-        await window.api.addProduct({ name: name.trim(), price: priceNum, quantity: qtyNum })
+        await window.api.addProduct(data)
       }
 
       onSaved()
@@ -50,7 +65,11 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>{isEdit ? 'Modifier le produit' : 'Nouveau produit'}</h3>
 
-        {error && <div className="error-msg" style={{ marginBottom: 12 }}>{error}</div>}
+        {error && (
+          <div className="error-msg" style={{ marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -60,18 +79,64 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
 
           <div className="form-group">
             <label>Prix unitaire (Ar)</label>
-            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} min="0" step="50" />
+            <input
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              min="0"
+              step="50"
+            />
           </div>
 
           <div className="form-group">
-            <label>Quantité en stock</label>
-            <input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} min="0" />
+            <label>Catégorie</label>
+            <select value={familleId} onChange={(e) => setFamilleId(Number(e.target.value) || '')}>
+              <option value="">Aucune catégorie</option>
+              {familles.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.nom}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label>Stock boutique</label>
+              <input
+                type="number"
+                value={stockBoutique}
+                onChange={(e) => setStockBoutique(e.target.value)}
+                min="0"
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label>Stock entrepôt</label>
+              <input
+                type="number"
+                value={stockEntrepot}
+                onChange={(e) => setStockEntrepot(e.target.value)}
+                min="0"
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Code-barres</label>
+            <input
+              type="text"
+              value={codeBarre}
+              onChange={(e) => setCodeBarre(e.target.value)}
+              placeholder="Optionnel"
+            />
           </div>
 
           <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>Annuler</button>
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              Annuler
+            </button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Enregistrement...' : isEdit ? '💾 Modifier' : '💾 Ajouter'}
+              {loading ? 'Enregistrement...' : isEdit ? 'Modifier' : 'Ajouter'}
             </button>
           </div>
         </form>
