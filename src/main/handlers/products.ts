@@ -135,4 +135,41 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
     })()
     return { success: true }
   })
+
+  ipcMain.handle('products:getByCategory', (_event, familleId: number | null) => {
+    if (familleId === null) {
+      return db
+        .prepare(
+          `SELECT p.*, f.nom as famille_nom
+           FROM products p
+           LEFT JOIN familles f ON f.id = p.famille_id
+           ORDER BY p.name`
+        )
+        .all()
+    }
+    return db
+      .prepare(
+        `SELECT p.*, f.nom as famille_nom
+         FROM products p
+         LEFT JOIN familles f ON f.id = p.famille_id
+         WHERE p.famille_id = ?
+         ORDER BY p.name`
+      )
+      .all(familleId)
+  })
+
+  ipcMain.handle('products:countByCategory', () => {
+    return db
+      .prepare(
+        `SELECT
+           p.famille_id as categoryId,
+           f.nom as categoryName,
+           COUNT(p.id) as count
+         FROM products p
+         LEFT JOIN familles f ON f.id = p.famille_id
+         GROUP BY p.famille_id
+         ORDER BY f.nom`
+      )
+      .all()
+  })
 }

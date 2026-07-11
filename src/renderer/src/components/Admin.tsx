@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import ProductForm from './ProductForm'
 import UserForm from './UserForm'
 import { getErrorMsg } from '../hooks/useApi'
@@ -7,12 +7,16 @@ type Tab = 'products' | 'users' | 'categories' | 'clients' | 'fournisseurs'
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('products')
-  const [products, setProducts] = useState<Product[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [categories, setCategories] = useState<Famille[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [search, setSearch] = useState('')
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+  const [categoryCounts, setCategoryCounts] = useState<
+    { categoryId: number | null; categoryName: string | null; count: number }[]
+  >([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [editing, setEditing] = useState<Product | null | 'new'>(null)
   const [showUserForm, setShowUserForm] = useState(false)
@@ -24,10 +28,14 @@ export default function Admin() {
   const searchResults = useMemo(() => {
     if (!search.trim()) return []
     const q = search.toLowerCase()
-    return products.filter((p) => p.name.toLowerCase().includes(q))
-  }, [products, search])
+    return filteredProducts.filter((p) => p.name.toLowerCase().includes(q))
+  }, [filteredProducts, search])
 
-  const loadProducts = () => window.api.getProducts().then(setProducts)
+  const loadProducts = useCallback(
+    () => window.api.getProductsByCategory(selectedCategoryId).then(setFilteredProducts),
+    [selectedCategoryId]
+  )
+  const loadCategoryCounts = () => window.api.countProductsByCategory().then(setCategoryCounts)
   const loadUsers = () => window.api.getUsers().then(setUsers)
   const loadCategories = () => window.api.getCategories().then(setCategories)
   const loadClients = () => window.api.getClients().then(setClients)
@@ -35,11 +43,12 @@ export default function Admin() {
 
   useEffect(() => {
     loadProducts()
+    loadCategoryCounts()
     loadUsers()
     loadCategories()
     loadClients()
     loadFournisseurs()
-  }, [])
+  }, [loadProducts])
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg })
@@ -194,6 +203,24 @@ export default function Admin() {
             )}
           </div>
 
+          {categories.length > 0 && (
+            <div className="category-filter-bar">
+              {categoryCounts.map((cat) => (
+                <button
+                  key={cat.categoryId ?? 'none'}
+                  className={`category-filter-pill ${selectedCategoryId === cat.categoryId ? 'active' : ''}`}
+                  onClick={() =>
+                    setSelectedCategoryId(
+                      selectedCategoryId === cat.categoryId ? null : cat.categoryId
+                    )
+                  }
+                >
+                  {cat.categoryName ?? 'Sans categorie'} ({cat.count})
+                </button>
+              ))}
+            </div>
+          )}
+
           <table className="admin-table">
             <thead>
               <tr>
@@ -207,7 +234,7 @@ export default function Admin() {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <tr key={product.id}>
                   <td style={{ color: 'var(--text-secondary)' }}>{product.id}</td>
                   <td>
@@ -229,13 +256,15 @@ export default function Admin() {
                   </td>
                 </tr>
               ))}
-              {products.length === 0 && (
+              {filteredProducts.length === 0 && (
                 <tr>
                   <td
                     colSpan={7}
                     style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 40 }}
                   >
-                    Aucun produit. Cliquez sur "Nouveau produit" pour commencer.
+                    {selectedCategoryId !== null
+                      ? 'Aucune produit dans cette categorie.'
+                      : 'Aucun produit. Cliquez sur "Nouveau produit" pour commencer.'}
                   </td>
                 </tr>
               )}
