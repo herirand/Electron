@@ -95,6 +95,10 @@ interface CashierAPI {
   ): Promise<{ changes: number }>
   transferStock(id: number, quantity: number): Promise<{ success: boolean }>
   deleteProduct(id: number): Promise<{ changes: number }>
+  getProductsByCategory(familleId: number | null): Promise<Product[]>
+  countProductsByCategory(): Promise<
+    { categoryId: number | null; categoryName: string | null; count: number }[]
+  >
 
   getCategories(): Promise<Famille[]>
   addCategory(nom: string): Promise<{ lastInsertRowid: number }>
@@ -132,7 +136,15 @@ interface CashierAPI {
   ): Promise<{ saleId: number; total: number }>
   getSales(): Promise<Sale[]>
   getTodaySales(): Promise<Sale[]>
+  getSalesByDate(date: string): Promise<Sale[]>
+  getJournalierByMonth(
+    year: number,
+    month: number
+  ): Promise<{ days: Journalier[]; total: number; benefice: number; jour_ventes: number }>
   openTicketsFolder(): Promise<void>
+  getTicketContent(saleId: number): Promise<string | null>
+  getAllTickets(): Promise<{ saleId: number; content: string }[]>
+  exportTicket(saleId: number): Promise<{ success: boolean; path?: string }>
   resetDatabase(): Promise<{ success: boolean }>
 }
 

@@ -31,6 +31,9 @@ const api = {
   transferStock: (id: number, quantity: number) =>
     ipcRenderer.invoke('products:transferStock', { id, quantity }),
   deleteProduct: (id: number) => ipcRenderer.invoke('products:delete', id),
+  getProductsByCategory: (familleId: number | null) =>
+    ipcRenderer.invoke('products:getByCategory', familleId),
+  countProductsByCategory: () => ipcRenderer.invoke('products:countByCategory'),
 
   getCategories: () => ipcRenderer.invoke('categories:getAll'),
   addCategory: (nom: string) => ipcRenderer.invoke('categories:add', { nom }),
@@ -60,7 +63,13 @@ const api = {
   ) => ipcRenderer.invoke('sales:create', { items, cashier, clientId }),
   getSales: () => ipcRenderer.invoke('sales:getAll'),
   getTodaySales: () => ipcRenderer.invoke('sales:getToday'),
+  getSalesByDate: (date: string) => ipcRenderer.invoke('sales:getByDate', date),
+  getJournalierByMonth: (year: number, month: number) =>
+    ipcRenderer.invoke('journalier:getByMonth', { year, month }),
   openTicketsFolder: () => ipcRenderer.invoke('tickets:open'),
+  getTicketContent: (saleId: number) => ipcRenderer.invoke('tickets:getContent', saleId),
+  getAllTickets: () => ipcRenderer.invoke('tickets:getAll'),
+  exportTicket: (saleId: number) => ipcRenderer.invoke('tickets:export', saleId),
 
   resetDatabase: () => ipcRenderer.invoke('db:reset')
 }

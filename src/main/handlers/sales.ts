@@ -141,6 +141,68 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
       }
     })
   })
+
+  ipcMain.handle('sales:getByDate', (_event, date: string) => {
+    const sales = db
+      .prepare(
+        `
+      SELECT s.*,
+        c.nom as client_nom,
+        GROUP_CONCAT(
+          json_object('name', COALESCE(p.name, 'Produit supprimé'), 'quantity', si.quantity, 'unit_price', si.unit_price)
+        ) as items_json
+      FROM sales s
+      LEFT JOIN clients c ON c.id = s.client_id
+      LEFT JOIN sale_items si ON si.sale_id = s.id
+      LEFT JOIN products p ON p.id = si.product_id
+      WHERE date(s.created_at) = ?
+      GROUP BY s.id
+      ORDER BY s.created_at DESC
+      `
+      )
+      .all(date)
+
+    return (sales as Array<Record<string, unknown>>).map((sale) => {
+      const raw = (sale as { items_json: string | null }).items_json
+      return {
+        ...sale,
+        items: raw ? JSON.parse(`[${raw}]`) : []
+      }
+    })
+  })
+
+  ipcMain.handle(
+    'journalier:getByMonth',
+    (_event, { year, month }: { year: number; month: number }) => {
+      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
+      const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0]
+
+      const days = db
+        .prepare(
+          `SELECT * FROM journalier
+           WHERE date >= ? AND date <= ?
+           ORDER BY date ASC`
+        )
+        .all(startDate, endDate)
+
+      const summary = db
+        .prepare(
+          `SELECT
+             COALESCE(SUM(total_ventes), 0) as total,
+             COALESCE(SUM(benefice), 0) as benefice,
+             COUNT(*) as jour_ventes
+           FROM journalier
+           WHERE date >= ? AND date <= ?`
+        )
+        .get(startDate, endDate) as {
+        total: number
+        benefice: number
+        jour_ventes: number
+      }
+
+      return { days, ...summary }
+    }
+  )
 }
 
 function updateJournalier(db: Database.Database): void {
