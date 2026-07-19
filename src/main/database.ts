@@ -149,30 +149,7 @@ if (!salesInfo.some((col) => col.name === 'was_credit')) {
 const insertUser = db.prepare(
   'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)'
 )
-insertUser.run('admin', hashPassword('admin'), 'admin')
-insertUser.run('cashier', hashPassword('cashier'), 'cashier')
-
-const insertFamille = db.prepare('INSERT OR IGNORE INTO familles (nom) VALUES (?)')
-insertFamille.run('Alimentaire')
-insertFamille.run('Boisson')
-insertFamille.run('Hygiène')
-
-const alim = db.prepare('SELECT id FROM familles WHERE nom = ?').get('Alimentaire') as {
-  id: number
-}
-const hyg = db.prepare('SELECT id FROM familles WHERE nom = ?').get('Hygiène') as { id: number }
-
-const existingProducts = db.prepare('SELECT id FROM products LIMIT 1').get()
-if (!existingProducts) {
-  const insertProduct = db.prepare(
-    'INSERT OR IGNORE INTO products (name, price, purchase_price, famille_id, stock_boutique, stock_entrepot) VALUES (?, ?, ?, ?, ?, ?)'
-  )
-  insertProduct.run('Riz 5kg', 4500, 3500, alim.id, 50, 100)
-  insertProduct.run('Sucre 1kg', 3000, 2200, alim.id, 30, 80)
-  insertProduct.run('Huile 1L', 8000, 6000, alim.id, 20, 60)
-  insertProduct.run('Lait 1L', 3500, 2800, alim.id, 15, 40)
-  insertProduct.run('Savon', 1500, 900, hyg.id, 40, 100)
-}
+insertUser.run('admin', hashPassword('1806soa'), 'admin')
 
 export default db
 export { hashPassword }

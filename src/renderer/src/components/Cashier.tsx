@@ -3,6 +3,7 @@ import { getErrorMsg } from '../hooks/useApi'
 
 interface CashierProps {
   user: User
+  view: CashierTab
 }
 
 interface CartItem {
@@ -12,28 +13,11 @@ interface CartItem {
 
 type CashierTab = 'caisse' | 'credits'
 
-export default function Cashier({ user }: CashierProps) {
-  const [activeTab, setActiveTab] = useState<CashierTab>('caisse')
-
+export default function Cashier({ user, view }: CashierProps) {
   return (
     <div>
-      <div className="admin-tabs" style={{ marginBottom: 20 }}>
-        <button
-          className={`admin-tab ${activeTab === 'caisse' ? 'active' : ''}`}
-          onClick={() => setActiveTab('caisse')}
-        >
-          🛒 Caisse
-        </button>
-        <button
-          className={`admin-tab ${activeTab === 'credits' ? 'active' : ''}`}
-          onClick={() => setActiveTab('credits')}
-        >
-          💳 Crédits
-        </button>
-      </div>
-
-      {activeTab === 'caisse' && <CaisseTab user={user} />}
-      {activeTab === 'credits' && <CashierCreditsTab user={user} />}
+      {view === 'caisse' && <CaisseTab user={user} />}
+      {view === 'credits' && <CashierCreditsTab user={user} />}
     </div>
   )
 }

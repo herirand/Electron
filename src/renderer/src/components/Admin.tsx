@@ -10,7 +10,6 @@ type Tab =
   | 'clients'
   | 'fournisseurs'
   | 'transfert'
-  | 'credits'
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('products')
@@ -132,7 +131,6 @@ export default function Admin() {
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'products', label: 'Produits', icon: '📦' },
     { key: 'transfert', label: 'Transfert', icon: '🔄' },
-    { key: 'credits', label: 'Crédits', icon: '💳' },
     { key: 'categories', label: 'Catégories', icon: '🏷' },
     { key: 'clients', label: 'Clients', icon: '👤' },
     { key: 'fournisseurs', label: 'Fournisseurs', icon: '🚚' },
@@ -298,10 +296,6 @@ export default function Admin() {
       )}
 
       {tab === 'transfert' && <TransfertTab onNotify={(type, msg) => showToast(type, msg)} />}
-
-      {tab === 'credits' && (
-        <CreditsTab onNotify={(type, msg) => showToast(type, msg)} />
-      )}
 
       {tab === 'categories' && (
         <CategoriesTab
@@ -840,6 +834,7 @@ function TransfertTab({
   const [quantities, setQuantities] = useState<Map<number, number>>(new Map())
   const [loading, setLoading] = useState(false)
   const [loadingSuggestions, setLoadingSuggestions] = useState(true)
+  const [search, setSearch] = useState('')
 
   const loadSuggestions = () => {
     setLoadingSuggestions(true)
@@ -948,6 +943,10 @@ function TransfertTab({
     0
   )
 
+  const filteredProducts = allProducts.filter((p) =>
+    p.name.toLowerCase().includes(search.toLowerCase())
+  )
+
   return (
     <div>
       <div className="admin-header">
@@ -1051,6 +1050,26 @@ function TransfertTab({
           </div>
         </div>
 
+        <div className="cashier-search-panel" style={{ height: 'auto', marginBottom: 20 }}>
+          <div className="search-bar-wrapper">
+            <svg className="search-icon" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+              <path
+                d="M21 21L16.5 16.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un produit..."
+            />
+          </div>
+        </div>
+
         <table className="admin-table">
           <thead>
             <tr>
@@ -1062,7 +1081,7 @@ function TransfertTab({
             </tr>
           </thead>
           <tbody>
-            {allProducts.map((p) => {
+            {filteredProducts.map((p) => {
               const isLow = p.stock_boutique < 10
               const isSelected = selectedIds.has(p.id)
               return (

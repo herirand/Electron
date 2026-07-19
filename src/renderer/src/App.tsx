@@ -5,7 +5,7 @@ import Admin from './components/Admin'
 import SalesHistory from './components/SalesHistory'
 import './styles/pos.css'
 
-type Page = 'caisse' | 'admin' | 'sales'
+type Page = 'caisse' | 'credits' | 'admin' | 'sales'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -32,6 +32,17 @@ export default function App() {
             />
           </svg>
           Caisse
+        </button>
+
+        <button
+          className={`nav-pill ${page === 'credits' ? 'active' : ''}`}
+          onClick={() => setPage('credits')}
+        >
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M3 10H21" stroke="currentColor" strokeWidth="1.8" />
+          </svg>
+          Crédits
         </button>
 
         {user.role === 'admin' && (
@@ -82,7 +93,8 @@ export default function App() {
       </nav>
 
       <div className="main-content">
-        {page === 'caisse' && <Cashier user={user} />}
+        {page === 'caisse' && <Cashier user={user} view="caisse" />}
+        {page === 'credits' && <Cashier user={user} view="credits" />}
         {page === 'admin' && user.role === 'admin' && <Admin />}
         {page === 'sales' && user.role === 'admin' && <SalesHistory />}
       </div>

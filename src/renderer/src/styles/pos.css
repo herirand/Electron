@@ -316,12 +316,14 @@ body {
 
 /* ─── PANNEAU RECHERCHE ─── */
 .cashier-search-panel {
-  background: var(--bg-secondary);
-  border: 1.5px solid var(--border);
-  border-radius: 20px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .search-bar-wrapper {

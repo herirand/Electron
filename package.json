@@ -25,7 +25,8 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@fontsource/outfit": "^5.2.8",
     "better-sqlite3": "^12.11.1",
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -38,7 +39,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "electron": "^39.2.6",
-    "electron-builder": "^26.0.12",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react": "^7.37.5",
