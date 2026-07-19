@@ -153,7 +153,13 @@ export default function SalesHistory() {
                 >
                   <span className="calendar-day-num">{d.getDate()}</span>
                   {hasSales && (
-                    <span className="calendar-day-total">{j!.total_ventes.toLocaleString()}</span>
+                    <span className="calendar-day-total">
+                      {j!.total_ventes.toLocaleString()}
+                      <br />
+                      <span style={{ fontSize: '0.75em', color: 'var(--text-secondary)' }}>
+                        +{j!.benefice.toLocaleString()} B
+                      </span>
+                    </span>
                   )}
                 </button>
               )
@@ -161,10 +167,18 @@ export default function SalesHistory() {
           </div>
 
           <div className="calendar-month-summary">
-            Total du mois :{' '}
-            <strong style={{ color: 'var(--accent, #f5b731)' }}>
-              {monthData ? monthData.total.toLocaleString() : 0} Ar
-            </strong>
+            <div>
+              Total du mois :{' '}
+              <strong style={{ color: 'var(--accent, #f5b731)' }}>
+                {monthData ? monthData.total.toLocaleString() : 0} Ar
+              </strong>
+            </div>
+            <div>
+              Bénéfice du mois :{' '}
+              <strong style={{ color: '#4caf50' }}>
+                {monthData ? monthData.benefice.toLocaleString() : 0} Ar
+              </strong>
+            </div>
           </div>
         </div>
 
@@ -183,7 +197,12 @@ export default function SalesHistory() {
                 {(() => {
                   const j = daysByDate.get(selectedDate)
                   return j ? (
-                    <span className="day-panel-total">{j.total_ventes.toLocaleString()} Ar</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span className="day-panel-total">{j.total_ventes.toLocaleString()} Ar</span>
+                      <div style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>
+                        Bénéfice : {j.benefice.toLocaleString()} Ar
+                      </div>
+                    </div>
                   ) : null
                 })()}
               </div>

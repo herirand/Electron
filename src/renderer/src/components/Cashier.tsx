@@ -10,17 +10,47 @@ interface CartItem {
   quantity: number
 }
 
+type CashierTab = 'caisse' | 'credits'
+
 export default function Cashier({ user }: CashierProps) {
+  const [activeTab, setActiveTab] = useState<CashierTab>('caisse')
+
+  return (
+    <div>
+      <div className="admin-tabs" style={{ marginBottom: 20 }}>
+        <button
+          className={`admin-tab ${activeTab === 'caisse' ? 'active' : ''}`}
+          onClick={() => setActiveTab('caisse')}
+        >
+          🛒 Caisse
+        </button>
+        <button
+          className={`admin-tab ${activeTab === 'credits' ? 'active' : ''}`}
+          onClick={() => setActiveTab('credits')}
+        >
+          💳 Crédits
+        </button>
+      </div>
+
+      {activeTab === 'caisse' && <CaisseTab user={user} />}
+      {activeTab === 'credits' && <CashierCreditsTab user={user} />}
+    </div>
+  )
+}
+
+function CaisseTab({ user }: { user: User }) {
   const [products, setProducts] = useState<Product[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [cart, setCart] = useState<CartItem[]>([])
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
   const [editQty, setEditQty] = useState(1)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const [isCredit, setIsCredit] = useState(false)
+  const [creditClientName, setCreditClientName] = useState('')
 
   useEffect(() => {
     window.api.getProducts().then(setProducts)
@@ -44,22 +74,26 @@ export default function Cashier({ user }: CashierProps) {
   }
 
   const handleAdd = () => {
-    if (selectedId === null) return
-    const product = products.find((p) => p.id === selectedId)
-    if (!product) return
+    if (selectedIds.size === 0) return
+
+    const productsToAdd = products.filter((p) => selectedIds.has(p.id))
 
     setCart((prev) => {
-      const existing = prev.find((i) => i.product.id === product.id)
-      if (existing) {
-        return prev.map((i) =>
-          i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
-        )
+      const newCart = [...prev]
+      for (const product of productsToAdd) {
+        const existing = newCart.find((i) => i.product.id === product.id)
+        if (existing) {
+          const idx = newCart.indexOf(existing)
+          newCart[idx] = { ...existing, quantity: existing.quantity + 1 }
+        } else {
+          newCart.push({ product, quantity: 1 })
+        }
       }
-      return [...prev, { product, quantity: 1 }]
+      return newCart
     })
 
     setSearch('')
-    setSelectedId(null)
+    setSelectedIds(new Set())
   }
 
   const handleSaveEdit = () => {
@@ -78,6 +112,10 @@ export default function Cashier({ user }: CashierProps) {
 
   const handleValidate = async () => {
     if (cart.length === 0) return
+    if (isCredit && !creditClientName.trim()) {
+      showToast('error', 'Le nom du client est requis pour un crédit')
+      return
+    }
     setLoading(true)
     try {
       await window.api.createSale(
@@ -87,11 +125,15 @@ export default function Cashier({ user }: CashierProps) {
           unitPrice: i.product.price
         })),
         user.username,
-        selectedClientId || undefined
+        selectedClientId || undefined,
+        isCredit,
+        isCredit ? creditClientName.trim() : undefined
       )
-      showToast('success', 'Vente enregistree')
+      showToast('success', isCredit ? 'Crédit enregistré' : 'Vente enregistrée')
       setCart([])
       setSelectedClientId(null)
+      setIsCredit(false)
+      setCreditClientName('')
     } catch (err) {
       showToast('error', getErrorMsg(err, 'Erreur lors de la vente'))
     } finally {
@@ -141,7 +183,7 @@ export default function Cashier({ user }: CashierProps) {
             <span>TOTAL</span>
             <span>{total.toLocaleString()} Ar</span>
           </div>
-          {clients.length > 0 && (
+          {clients.length > 0 && !isCredit && (
             <div style={{ flex: 1 }}>
               <select
                 className="search-bar-wrapper"
@@ -160,13 +202,95 @@ export default function Cashier({ user }: CashierProps) {
           )}
         </div>
 
-        <button
-          className="btn-validate"
-          onClick={handleValidate}
-          disabled={cart.length === 0 || loading}
-        >
-          {loading ? 'Validation...' : 'Valider la vente'}
-        </button>
+        {isCredit && (
+          <div style={{ marginTop: 12 }}>
+            <input
+              type="text"
+              value={creditClientName}
+              onChange={(e) => setCreditClientName(e.target.value)}
+              placeholder="Nom du client pour le crédit..."
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                fontSize: 14,
+                border: '1.5px solid var(--border)',
+                borderRadius: 30,
+                outline: 'none'
+              }}
+            />
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+          <button
+            className="btn-validate"
+            onClick={() => {
+              setIsCredit(false)
+              handleValidate()
+            }}
+            disabled={cart.length === 0 || loading || isCredit}
+            style={{ flex: 1, opacity: isCredit ? 0.5 : 1 }}
+          >
+            {loading && !isCredit ? 'Validation...' : 'Valider la vente'}
+          </button>
+          <button
+            className="btn-validate"
+            onClick={() => {
+              setIsCredit(true)
+              handleValidate()
+            }}
+            disabled={cart.length === 0 || loading || !isCredit}
+            style={{
+              flex: 1,
+              background: isCredit ? 'var(--danger)' : 'var(--bg-card)',
+              color: isCredit ? 'white' : 'var(--text-primary)',
+              opacity: !isCredit && cart.length > 0 ? 1 : cart.length === 0 ? 0.35 : 1
+            }}
+          >
+            {loading && isCredit ? 'Validation...' : 'Vente à crédit'}
+          </button>
+        </div>
+        {!isCredit && cart.length > 0 && (
+          <button
+            onClick={() => setIsCredit(true)}
+            style={{
+              marginTop: 8,
+              padding: '10px',
+              border: '1px dashed var(--danger)',
+              borderRadius: 30,
+              background: 'transparent',
+              color: 'var(--danger)',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              width: '100%'
+            }}
+          >
+            💳 Créditer cette vente
+          </button>
+        )}
+        {isCredit && (
+          <button
+            onClick={() => {
+              setIsCredit(false)
+              setCreditClientName('')
+            }}
+            style={{
+              marginTop: 8,
+              padding: '10px',
+              border: '1px solid var(--border)',
+              borderRadius: 30,
+              background: 'transparent',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              width: '100%'
+            }}
+          >
+            Annuler le crédit
+          </button>
+        )}
       </div>
 
       <div className="cashier-search-panel">
@@ -185,7 +309,7 @@ export default function Cashier({ user }: CashierProps) {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
-              setSelectedId(null)
+              setSelectedIds(new Set())
             }}
             placeholder="Rechercher un produit..."
           />
@@ -196,18 +320,55 @@ export default function Cashier({ user }: CashierProps) {
             {results.map((p) => (
               <div
                 key={p.id}
-                className={`search-result-row ${selectedId === p.id ? 'selected' : ''}`}
-                onClick={() => setSelectedId(p.id)}
+                className={`search-result-row ${selectedIds.has(p.id) ? 'selected' : ''}`}
+                onClick={() => {
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(p.id)) {
+                      next.delete(p.id)
+                    } else {
+                      next.add(p.id)
+                    }
+                    return next
+                  })
+                }}
               >
-                <span>{p.name}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 4,
+                      border: '1.5px solid var(--border)',
+                      background: selectedIds.has(p.id) ? 'var(--text-primary)' : 'transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}
+                  >
+                    {selectedIds.has(p.id) && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M5 13l4 4L19 7"
+                          stroke="white"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                  </span>
+                  {p.name}
+                </span>
                 <span>{p.price.toLocaleString()} Ar</span>
               </div>
             ))}
           </div>
         )}
 
-        <button className="btn-add-product" onClick={handleAdd} disabled={selectedId === null}>
-          AJOUTER
+        <button className="btn-add-product" onClick={handleAdd} disabled={selectedIds.size === 0}>
+          {selectedIds.size > 0 ? `AJOUTER (${selectedIds.size})` : 'AJOUTER'}
         </button>
       </div>
 
@@ -233,6 +394,208 @@ export default function Cashier({ user }: CashierProps) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+    </div>
+  )
+}
+
+function CashierCreditsTab({ user }: { user: User }) {
+  const [credits, setCredits] = useState<Sale[]>([])
+  const [loading, setLoading] = useState(true)
+  const [validatingId, setValidatingId] = useState<number | null>(null)
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+
+  const loadCredits = () => {
+    setLoading(true)
+    window.api.getCredits().then((data) => {
+      setCredits(data)
+      setLoading(false)
+    })
+  }
+
+  useEffect(() => {
+    loadCredits()
+  }, [])
+
+  const showToast = (type: 'success' | 'error', msg: string) => {
+    setToast({ type, msg })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handlePayCredit = async (saleId: number) => {
+    try {
+      await window.api.payCredit(saleId, user.username)
+      showToast('success', 'Crédit marqué comme payé')
+      setValidatingId(null)
+      loadCredits()
+    } catch (err) {
+      showToast('error', getErrorMsg(err, 'Erreur lors de la validation'))
+    }
+  }
+
+  const pendingCredits = credits.filter((c) => c.status === 'credit')
+  const paidCredits = credits.filter((c) => c.status === 'paid' && c.paid_at)
+
+  if (loading) {
+    return <div style={{ textAlign: 'center', padding: 40 }}>Chargement...</div>
+  }
+
+  return (
+    <div>
+      {pendingCredits.length > 0 && (
+        <div style={{ marginBottom: 30 }}>
+          <h3 style={{ fontSize: 16, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            Crédits en attente ({pendingCredits.length})
+          </h3>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Vente #</th>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Total</th>
+                <th>Créé par</th>
+                <th>Articles</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingCredits.map((sale) => (
+                <tr key={sale.id}>
+                  <td style={{ color: 'var(--text-secondary)' }}>#{sale.id}</td>
+                  <td>
+                    {new Date(sale.created_at).toLocaleDateString('fr-FR', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </td>
+                  <td>
+                    <strong>{sale.client_name || sale.client_nom || '—'}</strong>
+                  </td>
+                  <td style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                    {sale.total.toLocaleString()} Ar
+                  </td>
+                  <td>{sale.created_by || sale.cashier}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200 }}>
+                    {Array.isArray(sale.items) &&
+                      sale.items
+                        .filter(Boolean)
+                        .map((item) => `${item.name} ×${item.quantity}`)
+                        .join(', ')}
+                  </td>
+                  <td>
+                    {validatingId === sale.id ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <button
+                          className="btn-add"
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: 12,
+                            background: 'var(--success)'
+                          }}
+                          onClick={() => handlePayCredit(sale.id)}
+                        >
+                          Confirmer le paiement
+                        </button>
+                        <button
+                          className="btn-edit"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => setValidatingId(null)}
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn-add"
+                        style={{ background: 'var(--success)' }}
+                        onClick={() => setValidatingId(sale.id)}
+                      >
+                        💰 Payer
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {pendingCredits.length === 0 && (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: 40,
+            color: 'var(--text-secondary)',
+            marginBottom: 30
+          }}
+        >
+          Aucun crédit en attente
+        </div>
+      )}
+
+      {paidCredits.length > 0 && (
+        <div>
+          <h3 style={{ fontSize: 16, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            Crédits payés ({paidCredits.length})
+          </h3>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Vente #</th>
+                <th>Date création</th>
+                <th>Client</th>
+                <th>Total</th>
+                <th>Créé par</th>
+                <th>Payé le</th>
+                <th>Validé par</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paidCredits.map((sale) => (
+                <tr key={sale.id}>
+                  <td style={{ color: 'var(--text-secondary)' }}>#{sale.id}</td>
+                  <td>
+                    {new Date(sale.created_at).toLocaleDateString('fr-FR', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </td>
+                  <td>
+                    <strong>{sale.client_name || sale.client_nom || '—'}</strong>
+                  </td>
+                  <td style={{ color: 'var(--success)', fontWeight: 600 }}>
+                    {sale.total.toLocaleString()} Ar
+                  </td>
+                  <td>{sale.created_by || sale.cashier}</td>
+                  <td>
+                    {sale.paid_at
+                      ? new Date(sale.paid_at).toLocaleDateString('fr-FR', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : '—'}
+                  </td>
+                  <td>{sale.validated_by || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {paidCredits.length === 0 && pendingCredits.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
+          Aucun crédit dans le système
         </div>
       )}
 

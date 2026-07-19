@@ -2,6 +2,7 @@ interface Product {
   id: number
   name: string
   price: number
+  purchase_price: number
   famille_id: number | null
   famille_nom: string | null
   photo: string | null
@@ -31,6 +32,12 @@ interface Sale {
   cashier: string
   client_id: number | null
   client_nom: string | null
+  client_name: string | null
+  status: string
+  created_by: string | null
+  paid_at: string | null
+  validated_by: string | null
+  was_credit: number
   items: SaleItem[]
 }
 
@@ -64,6 +71,14 @@ interface Journalier {
   benefice: number
 }
 
+interface TransferSuggestion {
+  id: number
+  name: string
+  stock_boutique: number
+  stock_entrepot: number
+  suggestedQty: number
+}
+
 interface CashierAPI {
   login(username: string, password: string): Promise<User>
   signup(username: string, password: string): Promise<{ lastInsertRowid: number }>
@@ -74,6 +89,7 @@ interface CashierAPI {
   addProduct(data: {
     name: string
     price: number
+    purchase_price?: number
     famille_id?: number
     stock_boutique?: number
     stock_entrepot?: number
@@ -83,6 +99,7 @@ interface CashierAPI {
     id: number
     name: string
     price: number
+    purchase_price?: number
     famille_id?: number
     stock_boutique?: number
     stock_entrepot?: number
@@ -99,6 +116,8 @@ interface CashierAPI {
   countProductsByCategory(): Promise<
     { categoryId: number | null; categoryName: string | null; count: number }[]
   >
+  getTransferSuggestions(threshold?: number, targetLevel?: number): Promise<TransferSuggestion[]>
+  transferStockBulk(items: { id: number; quantity: number }[]): Promise<{ transferred: number }>
 
   getCategories(): Promise<Famille[]>
   addCategory(nom: string): Promise<{ lastInsertRowid: number }>
@@ -132,7 +151,9 @@ interface CashierAPI {
   createSale(
     items: { productId: number; quantity: number; unitPrice: number }[],
     cashier?: string,
-    clientId?: number
+    clientId?: number,
+    isCredit?: boolean,
+    clientName?: string
   ): Promise<{ saleId: number; total: number }>
   getSales(): Promise<Sale[]>
   getTodaySales(): Promise<Sale[]>
@@ -141,6 +162,8 @@ interface CashierAPI {
     year: number,
     month: number
   ): Promise<{ days: Journalier[]; total: number; benefice: number; jour_ventes: number }>
+  getCredits(): Promise<Sale[]>
+  payCredit(saleId: number, validatedBy: string): Promise<{ success: boolean }>
   openTicketsFolder(): Promise<void>
   getTicketContent(saleId: number): Promise<string | null>
   getAllTickets(): Promise<{ saleId: number; content: string }[]>

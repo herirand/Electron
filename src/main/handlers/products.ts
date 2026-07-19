@@ -20,6 +20,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
       {
         name,
         price,
+        purchase_price,
         famille_id,
         stock_boutique,
         stock_entrepot,
@@ -27,6 +28,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
       }: {
         name: string
         price: number
+        purchase_price?: number
         famille_id?: number
         stock_boutique?: number
         stock_entrepot?: number
@@ -36,12 +38,13 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
       try {
         return db
           .prepare(
-            `INSERT INTO products (name, price, famille_id, stock_boutique, stock_entrepot, code_barre)
-             VALUES (?, ?, ?, ?, ?, ?)`
+            `INSERT INTO products (name, price, purchase_price, famille_id, stock_boutique, stock_entrepot, code_barre)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
           )
           .run(
             name,
             price,
+            purchase_price || 0,
             famille_id || null,
             stock_boutique || 0,
             stock_entrepot || 0,
@@ -63,6 +66,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         id,
         name,
         price,
+        purchase_price,
         famille_id,
         stock_boutique,
         stock_entrepot,
@@ -71,6 +75,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         id: number
         name: string
         price: number
+        purchase_price?: number
         famille_id?: number
         stock_boutique?: number
         stock_entrepot?: number
@@ -81,12 +86,13 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         return db
           .prepare(
             `UPDATE products
-             SET name = ?, price = ?, famille_id = ?, stock_boutique = ?, stock_entrepot = ?, code_barre = ?
+             SET name = ?, price = ?, purchase_price = ?, famille_id = ?, stock_boutique = ?, stock_entrepot = ?, code_barre = ?
              WHERE id = ?`
           )
           .run(
             name,
             price,
+            purchase_price || 0,
             famille_id || null,
             stock_boutique || 0,
             stock_entrepot || 0,
@@ -172,4 +178,59 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
       )
       .all()
   })
+
+  ipcMain.handle(
+    'products:getTransferSuggestions',
+    (_event, { threshold, targetLevel }: { threshold?: number; targetLevel?: number }) => {
+      const t = threshold ?? 10
+      const target = targetLevel ?? 20
+      return db
+        .prepare(
+          `SELECT id, name, stock_boutique, stock_entrepot,
+           MIN(?, stock_entrepot) as suggestedQty
+           FROM products
+           WHERE stock_boutique < ? AND stock_entrepot > 0
+           ORDER BY stock_boutique ASC`
+        )
+        .all(target, t)
+    }
+  )
+
+  ipcMain.handle(
+    'products:transferStockBulk',
+    (_event, { items }: { items: { id: number; quantity: number }[] }) => {
+      if (!items || items.length === 0) throw new Error('Aucun produit sélectionné')
+
+      const transfer = db.transaction(() => {
+        let transferred = 0
+        for (const item of items) {
+          if (item.quantity <= 0) continue
+          const product = db
+            .prepare('SELECT stock_entrepot FROM products WHERE id = ?')
+            .get(item.id) as { stock_entrepot: number } | undefined
+          if (!product) throw new Error(`Produit ${item.id} introuvable`)
+          if (product.stock_entrepot < item.quantity) {
+            const pName = db.prepare('SELECT name FROM products WHERE id = ?').get(item.id) as {
+              name: string
+            }
+            throw new Error(
+              `Stock entrepôt insuffisant pour "${pName.name}" (${product.stock_entrepot} disponible, ${item.quantity} demandé)`
+            )
+          }
+          db.prepare('UPDATE products SET stock_entrepot = stock_entrepot - ? WHERE id = ?').run(
+            item.quantity,
+            item.id
+          )
+          db.prepare('UPDATE products SET stock_boutique = stock_boutique + ? WHERE id = ?').run(
+            item.quantity,
+            item.id
+          )
+          transferred++
+        }
+        return transferred
+      })
+
+      return { transferred: transfer() }
+    }
+  )
 }

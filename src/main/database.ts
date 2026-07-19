@@ -29,6 +29,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     price REAL NOT NULL,
+    purchase_price REAL NOT NULL DEFAULT 0,
     famille_id INTEGER REFERENCES familles(id),
     photo TEXT DEFAULT NULL,
     code_barre TEXT DEFAULT NULL,
@@ -62,7 +63,12 @@ db.exec(`
     total REAL NOT NULL,
     benefice REAL NOT NULL DEFAULT 0,
     cashier TEXT NOT NULL DEFAULT 'caisse',
-    client_id INTEGER REFERENCES clients(id)
+    client_id INTEGER REFERENCES clients(id),
+    status TEXT NOT NULL DEFAULT 'paid',
+    client_name TEXT,
+    created_by TEXT,
+    paid_at DATETIME,
+    validated_by TEXT
   );
 
   CREATE TABLE IF NOT EXISTS sale_items (
@@ -105,8 +111,13 @@ if (!colNames.includes('stock_boutique')) {
 if (!colNames.includes('stock_entrepot')) {
   db.exec(`ALTER TABLE products ADD COLUMN stock_entrepot INTEGER NOT NULL DEFAULT 0`)
 }
+if (!colNames.includes('purchase_price')) {
+  db.exec(`ALTER TABLE products ADD COLUMN purchase_price REAL NOT NULL DEFAULT 0`)
+}
 if (colNames.includes('quantity') && colNames.includes('stock_boutique')) {
-  db.exec(`UPDATE products SET stock_boutique = quantity, stock_entrepot = 0 WHERE stock_boutique = 0 AND quantity > 0`)
+  db.exec(
+    `UPDATE products SET stock_boutique = quantity, stock_entrepot = 0 WHERE stock_boutique = 0 AND quantity > 0`
+  )
 }
 
 const salesInfo = db.prepare("PRAGMA table_info('sales')").all() as { name: string }[]
@@ -115,6 +126,24 @@ if (!salesInfo.some((col) => col.name === 'client_id')) {
 }
 if (!salesInfo.some((col) => col.name === 'benefice')) {
   db.exec(`ALTER TABLE sales ADD COLUMN benefice REAL NOT NULL DEFAULT 0`)
+}
+if (!salesInfo.some((col) => col.name === 'status')) {
+  db.exec(`ALTER TABLE sales ADD COLUMN status TEXT NOT NULL DEFAULT 'paid'`)
+}
+if (!salesInfo.some((col) => col.name === 'client_name')) {
+  db.exec(`ALTER TABLE sales ADD COLUMN client_name TEXT`)
+}
+if (!salesInfo.some((col) => col.name === 'created_by')) {
+  db.exec(`ALTER TABLE sales ADD COLUMN created_by TEXT`)
+}
+if (!salesInfo.some((col) => col.name === 'paid_at')) {
+  db.exec(`ALTER TABLE sales ADD COLUMN paid_at DATETIME`)
+}
+if (!salesInfo.some((col) => col.name === 'validated_by')) {
+  db.exec(`ALTER TABLE sales ADD COLUMN validated_by TEXT`)
+}
+if (!salesInfo.some((col) => col.name === 'was_credit')) {
+  db.exec(`ALTER TABLE sales ADD COLUMN was_credit INTEGER NOT NULL DEFAULT 0`)
 }
 
 const insertUser = db.prepare(
@@ -136,13 +165,13 @@ const hyg = db.prepare('SELECT id FROM familles WHERE nom = ?').get('Hygiène') 
 const existingProducts = db.prepare('SELECT id FROM products LIMIT 1').get()
 if (!existingProducts) {
   const insertProduct = db.prepare(
-    'INSERT OR IGNORE INTO products (name, price, famille_id, stock_boutique, stock_entrepot) VALUES (?, ?, ?, ?, ?)'
+    'INSERT OR IGNORE INTO products (name, price, purchase_price, famille_id, stock_boutique, stock_entrepot) VALUES (?, ?, ?, ?, ?, ?)'
   )
-  insertProduct.run('Riz 5kg', 4500, alim.id, 50, 100)
-  insertProduct.run('Sucre 1kg', 3000, alim.id, 30, 80)
-  insertProduct.run('Huile 1L', 8000, alim.id, 20, 60)
-  insertProduct.run('Lait 1L', 3500, alim.id, 15, 40)
-  insertProduct.run('Savon', 1500, hyg.id, 40, 100)
+  insertProduct.run('Riz 5kg', 4500, 3500, alim.id, 50, 100)
+  insertProduct.run('Sucre 1kg', 3000, 2200, alim.id, 30, 80)
+  insertProduct.run('Huile 1L', 8000, 6000, alim.id, 20, 60)
+  insertProduct.run('Lait 1L', 3500, 2800, alim.id, 15, 40)
+  insertProduct.run('Savon', 1500, 900, hyg.id, 40, 100)
 }
 
 export default db

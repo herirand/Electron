@@ -10,6 +10,7 @@ interface ProductFormProps {
 export default function ProductForm({ product, onClose, onSaved }: ProductFormProps) {
   const [name, setName] = useState(product?.name || '')
   const [price, setPrice] = useState(String(product?.price || ''))
+  const [purchasePrice, setPurchasePrice] = useState(String(product?.purchase_price || ''))
   const [familleId, setFamilleId] = useState<number | ''>(product?.famille_id || '')
   const [stockBoutique, setStockBoutique] = useState(String(product?.stock_boutique || '0'))
   const [stockEntrepot, setStockEntrepot] = useState(String(product?.stock_entrepot || '0'))
@@ -31,14 +32,17 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
 
     try {
       const priceNum = parseFloat(price)
+      const purchasePriceNum = parseFloat(purchasePrice) || 0
       const sbNum = parseInt(stockBoutique) || 0
       const seNum = parseInt(stockEntrepot) || 0
       if (!name.trim()) throw new Error('Le nom est requis')
       if (isNaN(priceNum) || priceNum <= 0) throw new Error('Le prix doit être un nombre positif')
+      if (purchasePriceNum < 0) throw new Error("Le prix d'achat ne peut pas être négatif")
 
       const data = {
         name: name.trim(),
         price: priceNum,
+        purchase_price: purchasePriceNum,
         famille_id: familleId || undefined,
         stock_boutique: sbNum,
         stock_entrepot: seNum,
@@ -83,6 +87,17 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
               type="number"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
+              min="0"
+              step="50"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Prix d'achat (Ar)</label>
+            <input
+              type="number"
+              value={purchasePrice}
+              onChange={(e) => setPurchasePrice(e.target.value)}
               min="0"
               step="50"
             />

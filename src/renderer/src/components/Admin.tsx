@@ -3,7 +3,14 @@ import ProductForm from './ProductForm'
 import UserForm from './UserForm'
 import { getErrorMsg } from '../hooks/useApi'
 
-type Tab = 'products' | 'users' | 'categories' | 'clients' | 'fournisseurs'
+type Tab =
+  | 'products'
+  | 'users'
+  | 'categories'
+  | 'clients'
+  | 'fournisseurs'
+  | 'transfert'
+  | 'credits'
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('products')
@@ -124,6 +131,8 @@ export default function Admin() {
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'products', label: 'Produits', icon: '📦' },
+    { key: 'transfert', label: 'Transfert', icon: '🔄' },
+    { key: 'credits', label: 'Crédits', icon: '💳' },
     { key: 'categories', label: 'Catégories', icon: '🏷' },
     { key: 'clients', label: 'Clients', icon: '👤' },
     { key: 'fournisseurs', label: 'Fournisseurs', icon: '🚚' },
@@ -228,6 +237,7 @@ export default function Admin() {
                 <th>Nom</th>
                 <th>Catégorie</th>
                 <th>Prix</th>
+                <th>Prix d'achat</th>
                 <th>Boutique</th>
                 <th>Entrepôt</th>
                 <th>Actions</th>
@@ -244,6 +254,9 @@ export default function Admin() {
                   <td style={{ color: 'var(--accent)', fontWeight: 600 }}>
                     {product.price.toLocaleString()} Ar
                   </td>
+                  <td style={{ color: 'var(--text-secondary)' }}>
+                    {product.purchase_price.toLocaleString()} Ar
+                  </td>
                   <td>{product.stock_boutique}</td>
                   <td>{product.stock_entrepot}</td>
                   <td>
@@ -259,7 +272,7 @@ export default function Admin() {
               {filteredProducts.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 40 }}
                   >
                     {selectedCategoryId !== null
@@ -282,6 +295,12 @@ export default function Admin() {
             />
           )}
         </>
+      )}
+
+      {tab === 'transfert' && <TransfertTab onNotify={(type, msg) => showToast(type, msg)} />}
+
+      {tab === 'credits' && (
+        <CreditsTab onNotify={(type, msg) => showToast(type, msg)} />
       )}
 
       {tab === 'categories' && (
@@ -806,6 +825,542 @@ function FournisseurForm({
           </div>
         </form>
       </div>
+    </div>
+  )
+}
+
+function TransfertTab({
+  onNotify
+}: {
+  onNotify: (type: 'success' | 'error', msg: string) => void
+}) {
+  const [suggestions, setSuggestions] = useState<TransferSuggestion[]>([])
+  const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [quantities, setQuantities] = useState<Map<number, number>>(new Map())
+  const [loading, setLoading] = useState(false)
+  const [loadingSuggestions, setLoadingSuggestions] = useState(true)
+
+  const loadSuggestions = () => {
+    setLoadingSuggestions(true)
+    window.api.getTransferSuggestions(10, 20).then((data) => {
+      setSuggestions(data)
+      setLoadingSuggestions(false)
+    })
+  }
+
+  const loadAllProducts = () => {
+    window.api.getProducts().then(setAllProducts)
+  }
+
+  useEffect(() => {
+    window.api.getTransferSuggestions(10, 20).then((data) => {
+      setSuggestions(data)
+      setLoadingSuggestions(false)
+    })
+    window.api.getProducts().then(setAllProducts)
+  }, [])
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+        if (!quantities.has(id)) {
+          const product = allProducts.find((p) => p.id === id)
+          if (product) {
+            setQuantities((q) => new Map(q).set(id, product.stock_entrepot))
+          }
+        }
+      }
+      return next
+    })
+  }
+
+  const updateQuantity = (id: number, qty: number) => {
+    setQuantities((prev) => new Map(prev).set(id, Math.max(0, qty)))
+  }
+
+  const selectAll = () => {
+    const available = allProducts.filter((p) => p.stock_entrepot > 0)
+    const allSelected = available.every((p) => selectedIds.has(p.id))
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      const next = new Set(available.map((p) => p.id))
+      setSelectedIds(next)
+      const newQty = new Map(quantities)
+      for (const p of available) {
+        if (!newQty.has(p.id)) newQty.set(p.id, p.stock_entrepot)
+      }
+      setQuantities(newQty)
+    }
+  }
+
+  const handleTransferSuggested = async () => {
+    if (suggestions.length === 0) return
+    if (!confirm(`Transférer ${suggestions.length} produit(s) selon les suggestions ?`)) return
+    setLoading(true)
+    try {
+      const items = suggestions.map((s) => ({ id: s.id, quantity: s.suggestedQty }))
+      await window.api.transferStockBulk(items)
+      onNotify('success', `${suggestions.length} produit(s) transféré(s)`)
+      loadSuggestions()
+      loadAllProducts()
+      setSelectedIds(new Set())
+    } catch (err) {
+      onNotify('error', getErrorMsg(err, 'Erreur lors du transfert'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBulkTransfer = async () => {
+    if (selectedIds.size === 0) return
+    const items: { id: number; quantity: number }[] = []
+    for (const id of selectedIds) {
+      const qty = quantities.get(id) || 0
+      if (qty > 0) items.push({ id, quantity: qty })
+    }
+    if (items.length === 0) {
+      onNotify('error', 'Aucune quantité définie')
+      return
+    }
+    if (!confirm(`Transférer ${items.length} produit(s) de l'entrepôt vers la boutique ?`)) return
+    setLoading(true)
+    try {
+      const result = await window.api.transferStockBulk(items)
+      onNotify('success', `${result.transferred} produit(s) transféré(s) avec succès`)
+      loadSuggestions()
+      loadAllProducts()
+      setSelectedIds(new Set())
+    } catch (err) {
+      onNotify('error', getErrorMsg(err, 'Erreur lors du transfert'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const totalSelected = Array.from(selectedIds).reduce(
+    (sum, id) => sum + (quantities.get(id) || 0),
+    0
+  )
+
+  return (
+    <div>
+      <div className="admin-header">
+        <h2>Transfert Entrepôt → Boutique</h2>
+      </div>
+
+      {suggestions.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 12
+            }}
+          >
+            <h3 style={{ fontSize: 16, color: 'var(--text-secondary)' }}>
+              Suggestions de transfert (stock boutique {'<'} 10)
+            </h3>
+            <button
+              className="btn-add"
+              onClick={handleTransferSuggested}
+              disabled={loading || loadingSuggestions}
+              style={{ background: 'var(--brand-yellow)', color: 'var(--text-primary)' }}
+            >
+              {loading ? 'Transfert...' : `Transfert suggéré (${suggestions.length})`}
+            </button>
+          </div>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Produit</th>
+                <th>Stock Boutique</th>
+                <th>Stock Entrepôt</th>
+                <th>Qty suggérée</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suggestions.map((s) => (
+                <tr key={s.id}>
+                  <td>
+                    <strong>{s.name}</strong>
+                  </td>
+                  <td style={{ color: 'var(--danger)', fontWeight: 600 }}>{s.stock_boutique}</td>
+                  <td>{s.stock_entrepot}</td>
+                  <td style={{ color: 'var(--accent, #f5b731)', fontWeight: 600 }}>
+                    {s.suggestedQty}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {loadingSuggestions && (
+        <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-secondary)' }}>
+          Chargement des suggestions...
+        </div>
+      )}
+
+      {suggestions.length === 0 && !loadingSuggestions && (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: 30,
+            color: 'var(--text-secondary)',
+            marginBottom: 24
+          }}
+        >
+          Aucun produit en stock bas en boutique
+        </div>
+      )}
+
+      <div style={{ borderTop: '1px solid #eee', paddingTop: 20 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 12
+          }}
+        >
+          <h3 style={{ fontSize: 16, color: 'var(--text-secondary)' }}>Transfert en lot</h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn-edit" onClick={selectAll}>
+              {allProducts.filter((p) => p.stock_entrepot > 0).every((p) => selectedIds.has(p.id))
+                ? 'Tout désélectionner'
+                : 'Tout sélectionner'}
+            </button>
+            <button
+              className="btn-add"
+              onClick={handleBulkTransfer}
+              disabled={loading || selectedIds.size === 0}
+              style={{ background: 'var(--text-primary)', color: 'white' }}
+            >
+              {loading
+                ? 'Transfert...'
+                : `Transfert (${selectedIds.size} / ${totalSelected} unités)`}
+            </button>
+          </div>
+        </div>
+
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th style={{ width: 40 }}></th>
+              <th>Produit</th>
+              <th>Stock Boutique</th>
+              <th>Stock Entrepôt</th>
+              <th style={{ width: 120 }}>Qty à transférer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allProducts.map((p) => {
+              const isLow = p.stock_boutique < 10
+              const isSelected = selectedIds.has(p.id)
+              return (
+                <tr
+                  key={p.id}
+                  onClick={() => toggleSelect(p.id)}
+                  style={{
+                    cursor: 'pointer',
+                    background: isSelected ? 'rgba(245, 183, 49, 0.1)' : undefined
+                  }}
+                >
+                  <td>
+                    <span
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 4,
+                        border: '1.5px solid var(--border)',
+                        background: isSelected ? 'var(--text-primary)' : 'transparent',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {isSelected && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M5 13l4 4L19 7"
+                            stroke="white"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{p.name}</strong>
+                  </td>
+                  <td
+                    style={{
+                      color: isLow ? 'var(--danger)' : 'var(--text-secondary)',
+                      fontWeight: isLow ? 600 : 400
+                    }}
+                  >
+                    {p.stock_boutique}
+                  </td>
+                  <td>{p.stock_entrepot}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={p.stock_entrepot}
+                      value={isSelected ? quantities.get(p.id) || 0 : 0}
+                      onChange={(e) => updateQuantity(p.id, parseInt(e.target.value) || 0)}
+                      disabled={!isSelected}
+                      style={{
+                        width: 80,
+                        padding: '6px 8px',
+                        border: '1px solid var(--border)',
+                        borderRadius: 6,
+                        fontSize: 13,
+                        background: isSelected ? 'white' : 'var(--bg-card)'
+                      }}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function CreditsTab({
+  onNotify
+}: {
+  onNotify: (type: 'success' | 'error', msg: string) => void
+}) {
+  const [credits, setCredits] = useState<Sale[]>([])
+  const [loading, setLoading] = useState(true)
+  const [validatingId, setValidatingId] = useState<number | null>(null)
+  const [validatedBy, setValidatedBy] = useState('')
+
+  const loadCredits = () => {
+    setLoading(true)
+    window.api.getCredits().then((data) => {
+      setCredits(data)
+      setLoading(false)
+    })
+  }
+
+  useEffect(() => {
+    loadCredits()
+  }, [])
+
+  const handlePayCredit = async (saleId: number) => {
+    if (!validatedBy.trim()) {
+      onNotify('error', 'Le nom du validateur est requis')
+      return
+    }
+    try {
+      await window.api.payCredit(saleId, validatedBy.trim())
+      onNotify('success', 'Crédit marqué comme payé')
+      setValidatingId(null)
+      setValidatedBy('')
+      loadCredits()
+    } catch (err) {
+      onNotify('error', getErrorMsg(err, 'Erreur lors de la validation'))
+    }
+  }
+
+  const pendingCredits = credits.filter((c) => c.status === 'credit')
+  const paidCredits = credits.filter((c) => c.status === 'paid' && c.paid_at)
+
+  if (loading) {
+    return <div style={{ textAlign: 'center', padding: 40 }}>Chargement...</div>
+  }
+
+  return (
+    <div>
+      <div className="admin-header">
+        <h2>Gestion des crédits</h2>
+      </div>
+
+      {pendingCredits.length > 0 && (
+        <div style={{ marginBottom: 30 }}>
+          <h3 style={{ fontSize: 16, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            Crédits en attente ({pendingCredits.length})
+          </h3>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Vente #</th>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Total</th>
+                <th>Bénéfice</th>
+                <th>Créé par</th>
+                <th>Articles</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingCredits.map((sale) => (
+                <tr key={sale.id}>
+                  <td style={{ color: 'var(--text-secondary)' }}>#{sale.id}</td>
+                  <td>
+                    {new Date(sale.created_at).toLocaleDateString('fr-FR', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </td>
+                  <td>
+                    <strong>{sale.client_name || sale.client_nom || '—'}</strong>
+                  </td>
+                  <td style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                    {sale.total.toLocaleString()} Ar
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)' }}>
+                    {sale.benefice.toLocaleString()} Ar
+                  </td>
+                  <td>{sale.created_by || sale.cashier}</td>
+                  <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200 }}>
+                    {Array.isArray(sale.items) &&
+                      sale.items
+                        .filter(Boolean)
+                        .map((item) => `${item.name} ×${item.quantity}`)
+                        .join(', ')}
+                  </td>
+                  <td>
+                    {validatingId === sale.id ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          value={validatedBy}
+                          onChange={(e) => setValidatedBy(e.target.value)}
+                          placeholder="Validé par..."
+                          style={{
+                            padding: '4px 8px',
+                            border: '1px solid var(--border)',
+                            borderRadius: 4,
+                            fontSize: 12,
+                            width: 120
+                          }}
+                          autoFocus
+                        />
+                        <button
+                          className="btn-add"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => handlePayCredit(sale.id)}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          className="btn-edit"
+                          style={{ padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => {
+                            setValidatingId(null)
+                            setValidatedBy('')
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn-add"
+                        style={{ background: 'var(--success)' }}
+                        onClick={() => setValidatingId(sale.id)}
+                      >
+                        💰 Payer
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {pendingCredits.length === 0 && (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: 40,
+            color: 'var(--text-secondary)',
+            marginBottom: 30
+          }}
+        >
+          Aucun crédit en attente
+        </div>
+      )}
+
+      {paidCredits.length > 0 && (
+        <div>
+          <h3 style={{ fontSize: 16, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            Crédits payés ({paidCredits.length})
+          </h3>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Vente #</th>
+                <th>Date création</th>
+                <th>Client</th>
+                <th>Total</th>
+                <th>Créé par</th>
+                <th>Payé le</th>
+                <th>Validé par</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paidCredits.map((sale) => (
+                <tr key={sale.id}>
+                  <td style={{ color: 'var(--text-secondary)' }}>#{sale.id}</td>
+                  <td>
+                    {new Date(sale.created_at).toLocaleDateString('fr-FR', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </td>
+                  <td>
+                    <strong>{sale.client_name || sale.client_nom || '—'}</strong>
+                  </td>
+                  <td style={{ color: 'var(--success)', fontWeight: 600 }}>
+                    {sale.total.toLocaleString()} Ar
+                  </td>
+                  <td>{sale.created_by || sale.cashier}</td>
+                  <td>
+                    {sale.paid_at
+                      ? new Date(sale.paid_at).toLocaleDateString('fr-FR', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : '—'}
+                  </td>
+                  <td>{sale.validated_by || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {paidCredits.length === 0 && pendingCredits.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
+          Aucun crédit dans le système
+        </div>
+      )}
     </div>
   )
 }

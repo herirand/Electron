@@ -13,11 +13,15 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
       {
         items,
         cashier,
-        clientId
+        clientId,
+        isCredit,
+        clientName
       }: {
         items: { productId: number; quantity: number; unitPrice: number }[]
         cashier?: string
         clientId?: number
+        isCredit?: boolean
+        clientName?: string
       }
     ) => {
       const createSale = db.transaction(() => {
@@ -40,9 +44,31 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
           0
         )
 
+        let benefice = 0
+        for (const item of items) {
+          const product = db
+            .prepare('SELECT purchase_price FROM products WHERE id = ?')
+            .get(item.productId) as { purchase_price: number } | undefined
+          if (product) {
+            benefice += (item.unitPrice - product.purchase_price) * item.quantity
+          }
+        }
+
         const sale = db
-          .prepare('INSERT INTO sales (total, cashier, client_id) VALUES (?, ?, ?)')
-          .run(total, cashier || 'caisse', clientId || null)
+          .prepare(
+            `INSERT INTO sales (total, benefice, cashier, client_id, status, client_name, created_by, was_credit)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            total,
+            benefice,
+            cashier || 'caisse',
+            clientId || null,
+            isCredit ? 'credit' : 'paid',
+            clientName || null,
+            cashier || 'caisse',
+            isCredit ? 1 : 0
+          )
 
         for (const item of items) {
           db.prepare(
@@ -79,7 +105,9 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
       const ticket = generateTicket(result.saleId, itemsWithNames, result.total)
       writeFileSync(join(ticketsDir, `vente_${result.saleId}.txt`), ticket, 'utf-8')
 
-      updateJournalier(db)
+      if (!isCredit) {
+        updateJournalier(db, new Date().toISOString().split('T')[0])
+      }
 
       return result
     }
@@ -203,19 +231,65 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
       return { days, ...summary }
     }
   )
+
+  ipcMain.handle('sales:getCredits', () => {
+    const sales = db
+      .prepare(
+        `
+      SELECT s.*,
+        c.nom as client_nom,
+        GROUP_CONCAT(
+          json_object('name', COALESCE(p.name, 'Produit supprimé'), 'quantity', si.quantity, 'unit_price', si.unit_price)
+        ) as items_json
+      FROM sales s
+      LEFT JOIN clients c ON c.id = s.client_id
+      LEFT JOIN sale_items si ON si.sale_id = s.id
+      LEFT JOIN products p ON p.id = si.product_id
+      WHERE s.was_credit = 1
+      GROUP BY s.id
+      ORDER BY s.created_at DESC
+      `
+      )
+      .all()
+    return (sales as Array<Record<string, unknown>>).map((sale) => {
+      const raw = (sale as { items_json: string | null }).items_json
+      return {
+        ...sale,
+        items: raw ? JSON.parse(`[${raw}]`) : []
+      }
+    })
+  })
+
+  ipcMain.handle(
+    'sales:payCredit',
+    (_event, { saleId, validatedBy }: { saleId: number; validatedBy: string }) => {
+      const sale = db.prepare('SELECT id FROM sales WHERE id = ?').get(saleId) as
+        | { id: number }
+        | undefined
+      if (!sale) throw new Error('Vente introuvable')
+
+      db.prepare(
+        `UPDATE sales SET status = 'paid', paid_at = CURRENT_TIMESTAMP, validated_by = ? WHERE id = ?`
+      ).run(validatedBy, saleId)
+
+      const today = new Date().toISOString().split('T')[0]
+      updateJournalier(db, today)
+
+      return { success: true }
+    }
+  )
 }
 
-function updateJournalier(db: Database.Database): void {
-  const today = new Date().toISOString().split('T')[0]
+function updateJournalier(db: Database.Database, date: string): void {
   const stats = db
     .prepare(
       `SELECT
         COALESCE(SUM(total), 0) as total_ventes,
         COALESCE(SUM(benefice), 0) as benefice
        FROM sales
-       WHERE date(created_at) = ?`
+       WHERE date(created_at) = ? AND status = 'paid'`
     )
-    .get(today) as { total_ventes: number; benefice: number }
+    .get(date) as { total_ventes: number; benefice: number }
 
   db.prepare(
     `INSERT INTO journalier (date, total_ventes, benefice)
@@ -223,5 +297,5 @@ function updateJournalier(db: Database.Database): void {
      ON CONFLICT(date) DO UPDATE SET
        total_ventes = excluded.total_ventes,
        benefice = excluded.benefice`
-  ).run(today, stats.total_ventes, stats.benefice)
+  ).run(date, stats.total_ventes, stats.benefice)
 }

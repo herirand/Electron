@@ -12,6 +12,7 @@ const api = {
   addProduct: (data: {
     name: string
     price: number
+    purchase_price?: number
     famille_id?: number
     stock_boutique?: number
     stock_entrepot?: number
@@ -21,6 +22,7 @@ const api = {
     id: number
     name: string
     price: number
+    purchase_price?: number
     famille_id?: number
     stock_boutique?: number
     stock_entrepot?: number
@@ -34,6 +36,10 @@ const api = {
   getProductsByCategory: (familleId: number | null) =>
     ipcRenderer.invoke('products:getByCategory', familleId),
   countProductsByCategory: () => ipcRenderer.invoke('products:countByCategory'),
+  getTransferSuggestions: (threshold?: number, targetLevel?: number) =>
+    ipcRenderer.invoke('products:getTransferSuggestions', { threshold, targetLevel }),
+  transferStockBulk: (items: { id: number; quantity: number }[]) =>
+    ipcRenderer.invoke('products:transferStockBulk', { items }),
 
   getCategories: () => ipcRenderer.invoke('categories:getAll'),
   addCategory: (nom: string) => ipcRenderer.invoke('categories:add', { nom }),
@@ -59,13 +65,18 @@ const api = {
   createSale: (
     items: { productId: number; quantity: number; unitPrice: number }[],
     cashier?: string,
-    clientId?: number
-  ) => ipcRenderer.invoke('sales:create', { items, cashier, clientId }),
+    clientId?: number,
+    isCredit?: boolean,
+    clientName?: string
+  ) => ipcRenderer.invoke('sales:create', { items, cashier, clientId, isCredit, clientName }),
   getSales: () => ipcRenderer.invoke('sales:getAll'),
   getTodaySales: () => ipcRenderer.invoke('sales:getToday'),
   getSalesByDate: (date: string) => ipcRenderer.invoke('sales:getByDate', date),
   getJournalierByMonth: (year: number, month: number) =>
     ipcRenderer.invoke('journalier:getByMonth', { year, month }),
+  getCredits: () => ipcRenderer.invoke('sales:getCredits'),
+  payCredit: (saleId: number, validatedBy: string) =>
+    ipcRenderer.invoke('sales:payCredit', { saleId, validatedBy }),
   openTicketsFolder: () => ipcRenderer.invoke('tickets:open'),
   getTicketContent: (saleId: number) => ipcRenderer.invoke('tickets:getContent', saleId),
   getAllTickets: () => ipcRenderer.invoke('tickets:getAll'),
