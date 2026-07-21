@@ -7,6 +7,7 @@ const dbPath = path.join(app.getPath('userData'), 'pos.db')
 const db = new Database(dbPath)
 
 db.pragma('journal_mode = WAL')
+db.pragma('synchronous = NORMAL')
 
 function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex')
@@ -91,6 +92,15 @@ db.exec(`
     total_ventes REAL NOT NULL DEFAULT 0,
     benefice REAL NOT NULL DEFAULT 0
   );
+`)
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_products_famille ON products(famille_id);
+  CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
+  CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(code_barre);
+  CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
+  CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
+  CREATE INDEX IF NOT EXISTS idx_sales_was_credit ON sales(was_credit);
 `)
 
 const tableInfo = db.prepare("PRAGMA table_info('products')").all() as { name: string }[]

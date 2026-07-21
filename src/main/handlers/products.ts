@@ -1,11 +1,13 @@
 import { IpcMain } from 'electron'
 import Database from 'better-sqlite3'
 
+const LIST_COLUMNS = `p.id, p.name, p.price, p.purchase_price, p.famille_id, p.stock_boutique, p.stock_entrepot, p.code_barre, f.nom as famille_nom`
+
 export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('products:getAll', () => {
     return db
       .prepare(
-        `SELECT p.*, f.nom as famille_nom
+        `SELECT ${LIST_COLUMNS}
          FROM products p
          LEFT JOIN familles f ON f.id = p.famille_id
          ORDER BY p.name`
@@ -142,11 +144,29 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
     return { success: true }
   })
 
+  ipcMain.handle(
+    'products:search',
+    (_event, { query, limit }: { query: string; limit?: number }) => {
+      const q = `%${query}%`
+      const max = limit ?? 50
+      return db
+        .prepare(
+          `SELECT ${LIST_COLUMNS}
+           FROM products p
+           LEFT JOIN familles f ON f.id = p.famille_id
+           WHERE p.name LIKE ? OR p.code_barre LIKE ?
+           ORDER BY p.name
+           LIMIT ?`
+        )
+        .all(q, q, max)
+    }
+  )
+
   ipcMain.handle('products:getByCategory', (_event, familleId: number | null) => {
     if (familleId === null) {
       return db
         .prepare(
-          `SELECT p.*, f.nom as famille_nom
+          `SELECT ${LIST_COLUMNS}
            FROM products p
            LEFT JOIN familles f ON f.id = p.famille_id
            ORDER BY p.name`
@@ -155,7 +175,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
     }
     return db
       .prepare(
-        `SELECT p.*, f.nom as famille_nom
+        `SELECT ${LIST_COLUMNS}
          FROM products p
          LEFT JOIN familles f ON f.id = p.famille_id
          WHERE p.famille_id = ?

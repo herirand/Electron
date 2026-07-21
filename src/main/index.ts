@@ -5,7 +5,7 @@ import db from './database'
 import { registerAuthHandlers } from './handlers/auth'
 import { registerProductHandlers } from './handlers/products'
 import { registerSalesHandlers } from './handlers/sales'
-import { registerDbHandlers } from './handlers/db'
+
 import { registerTicketHandlers } from './handlers/tickets'
 import { registerCategoryHandlers } from './handlers/categories'
 import { registerClientHandlers } from './handlers/clients'
@@ -14,7 +14,6 @@ import { registerFournisseurHandlers } from './handlers/fournisseurs'
 registerAuthHandlers(ipcMain, db)
 registerProductHandlers(ipcMain, db)
 registerSalesHandlers(ipcMain, db)
-registerDbHandlers(ipcMain, db)
 registerTicketHandlers(ipcMain)
 registerCategoryHandlers(ipcMain, db)
 registerClientHandlers(ipcMain, db)

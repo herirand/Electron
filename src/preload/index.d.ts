@@ -86,6 +86,7 @@ interface CashierAPI {
   deleteUser(id: number): Promise<{ success: boolean }>
 
   getProducts(): Promise<Product[]>
+  searchProducts(query: string, limit?: number): Promise<Product[]>
   addProduct(data: {
     name: string
     price: number
@@ -168,7 +169,6 @@ interface CashierAPI {
   getTicketContent(saleId: number): Promise<string | null>
   getAllTickets(): Promise<{ saleId: number; content: string }[]>
   exportTicket(saleId: number): Promise<{ success: boolean; path?: string }>
-  resetDatabase(): Promise<{ success: boolean }>
 }
 
 interface Window {

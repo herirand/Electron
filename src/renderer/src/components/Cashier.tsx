@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { getErrorMsg } from '../hooks/useApi'
+import { useDebounce } from '../hooks/useDebounce'
 
 interface CashierProps {
   user: User
@@ -27,6 +28,7 @@ function CaisseTab({ user }: { user: User }) {
   const [clients, setClients] = useState<Client[]>([])
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounce(search, 200)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [cart, setCart] = useState<CartItem[]>([])
   const [editingItem, setEditingItem] = useState<CartItem | null>(null)
@@ -37,15 +39,21 @@ function CaisseTab({ user }: { user: User }) {
   const [creditClientName, setCreditClientName] = useState('')
 
   useEffect(() => {
-    window.api.getProducts().then(setProducts)
     window.api.getClients().then(setClients)
   }, [])
 
+  useEffect(() => {
+    if (!debouncedSearch.trim()) {
+      setProducts([])
+      return
+    }
+    window.api.searchProducts(debouncedSearch, 50).then(setProducts)
+  }, [debouncedSearch])
+
   const results = useMemo(() => {
-    if (!search.trim()) return []
-    const q = search.toLowerCase()
-    return products.filter((p) => p.name.toLowerCase().includes(q))
-  }, [products, search])
+    if (!debouncedSearch.trim()) return []
+    return products
+  }, [products, debouncedSearch])
 
   const total = useMemo(
     () => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
@@ -293,7 +301,7 @@ function CaisseTab({ user }: { user: User }) {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
-              setSelectedIds(new Set())
+              if (selectedIds.size > 0) setSelectedIds(new Set())
             }}
             placeholder="Rechercher un produit..."
           />

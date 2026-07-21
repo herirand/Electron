@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import ProductForm from './ProductForm'
 import UserForm from './UserForm'
 import { getErrorMsg } from '../hooks/useApi'
+import { useDebounce } from '../hooks/useDebounce'
 
 type Tab =
   | 'products'
@@ -18,6 +19,7 @@ export default function Admin() {
   const [clients, setClients] = useState<Client[]>([])
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounce(search, 200)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [categoryCounts, setCategoryCounts] = useState<
@@ -30,12 +32,20 @@ export default function Admin() {
   const [showClientForm, setShowClientForm] = useState<Client | null | 'new'>(null)
   const [showFournisseurForm, setShowFournisseurForm] = useState<Fournisseur | null | 'new'>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const [productPage, setProductPage] = useState(0)
+  const PAGE_SIZE = 50
 
   const searchResults = useMemo(() => {
-    if (!search.trim()) return []
-    const q = search.toLowerCase()
+    if (!debouncedSearch.trim()) return []
+    const q = debouncedSearch.toLowerCase()
     return filteredProducts.filter((p) => p.name.toLowerCase().includes(q))
-  }, [filteredProducts, search])
+  }, [filteredProducts, debouncedSearch])
+
+  const productTotalPages = Math.ceil(filteredProducts.length / PAGE_SIZE)
+  const paginatedProducts = useMemo(
+    () => filteredProducts.slice(productPage * PAGE_SIZE, (productPage + 1) * PAGE_SIZE),
+    [filteredProducts, productPage]
+  )
 
   const loadProducts = useCallback(
     () => window.api.getProductsByCategory(selectedCategoryId).then(setFilteredProducts),
@@ -59,18 +69,6 @@ export default function Admin() {
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg })
     setTimeout(() => setToast(null), 3000)
-  }
-
-  const handleReset = async () => {
-    if (!confirm('Réinitialiser la base ? Toutes les ventes et produits seront effacés.')) return
-    if (!confirm('Confirmer ? Cette action est irréversible.')) return
-    try {
-      await window.api.resetDatabase()
-      showToast('success', 'Base réinitialisée avec les produits par défaut')
-      loadProducts()
-    } catch (err) {
-      showToast('error', 'Erreur lors de la réinitialisation')
-    }
   }
 
   const handleDeleteProduct = async (product: Product) => {
@@ -159,9 +157,6 @@ export default function Admin() {
               <button className="btn-add" onClick={() => setEditing('new')}>
                 Nouveau produit
               </button>
-              <button className="btn-delete" onClick={handleReset}>
-                Reinitialiser
-              </button>
             </div>
           </div>
 
@@ -216,11 +211,12 @@ export default function Admin() {
                 <button
                   key={cat.categoryId ?? 'none'}
                   className={`category-filter-pill ${selectedCategoryId === cat.categoryId ? 'active' : ''}`}
-                  onClick={() =>
+                  onClick={() => {
                     setSelectedCategoryId(
                       selectedCategoryId === cat.categoryId ? null : cat.categoryId
                     )
-                  }
+                    setProductPage(0)
+                  }}
                 >
                   {cat.categoryName ?? 'Sans categorie'} ({cat.count})
                 </button>
@@ -242,7 +238,7 @@ export default function Admin() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
+              {paginatedProducts.map((product) => (
                 <tr key={product.id}>
                   <td style={{ color: 'var(--text-secondary)' }}>{product.id}</td>
                   <td>
@@ -280,7 +276,37 @@ export default function Admin() {
                 </tr>
               )}
             </tbody>
-          </table>
+           </table>
+
+          {productTotalPages > 1 && (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 12,
+                padding: '16px 0'
+              }}
+            >
+              <button
+                className="btn-edit"
+                disabled={productPage === 0}
+                onClick={() => setProductPage((p) => p - 1)}
+              >
+                ← Précédent
+              </button>
+              <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                {productPage + 1} / {productTotalPages} ({filteredProducts.length} produits)
+              </span>
+              <button
+                className="btn-edit"
+                disabled={productPage >= productTotalPages - 1}
+                onClick={() => setProductPage((p) => p + 1)}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
 
           {editing && (
             <ProductForm
@@ -835,6 +861,9 @@ function TransfertTab({
   const [loading, setLoading] = useState(false)
   const [loadingSuggestions, setLoadingSuggestions] = useState(true)
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounce(search, 200)
+  const [transferPage, setTransferPage] = useState(0)
+  const TRANSFER_PAGE_SIZE = 50
 
   const loadSuggestions = () => {
     setLoadingSuggestions(true)
@@ -938,13 +967,31 @@ function TransfertTab({
     }
   }
 
-  const totalSelected = Array.from(selectedIds).reduce(
-    (sum, id) => sum + (quantities.get(id) || 0),
-    0
+  const totalSelected = useMemo(
+    () => Array.from(selectedIds).reduce((sum, id) => sum + (quantities.get(id) || 0), 0),
+    [selectedIds, quantities]
   )
 
-  const filteredProducts = allProducts.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase())
+  const availableProducts = useMemo(
+    () => allProducts.filter((p) => p.stock_entrepot > 0),
+    [allProducts]
+  )
+
+  const allSelected = useMemo(
+    () => availableProducts.length > 0 && availableProducts.every((p) => selectedIds.has(p.id)),
+    [availableProducts, selectedIds]
+  )
+
+  const filteredProducts = useMemo(() => {
+    if (!debouncedSearch.trim()) return allProducts
+    const q = debouncedSearch.toLowerCase()
+    return allProducts.filter((p) => p.name.toLowerCase().includes(q))
+  }, [allProducts, debouncedSearch])
+
+  const transferTotalPages = Math.ceil(filteredProducts.length / TRANSFER_PAGE_SIZE)
+  const paginatedTransferProducts = useMemo(
+    () => filteredProducts.slice(transferPage * TRANSFER_PAGE_SIZE, (transferPage + 1) * TRANSFER_PAGE_SIZE),
+    [filteredProducts, transferPage]
   )
 
   return (
@@ -1033,9 +1080,7 @@ function TransfertTab({
           <h3 style={{ fontSize: 16, color: 'var(--text-secondary)' }}>Transfert en lot</h3>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button className="btn-edit" onClick={selectAll}>
-              {allProducts.filter((p) => p.stock_entrepot > 0).every((p) => selectedIds.has(p.id))
-                ? 'Tout désélectionner'
-                : 'Tout sélectionner'}
+              {allSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
             </button>
             <button
               className="btn-add"
@@ -1081,7 +1126,7 @@ function TransfertTab({
             </tr>
           </thead>
           <tbody>
-            {filteredProducts.map((p) => {
+            {paginatedTransferProducts.map((p) => {
               const isLow = p.stock_boutique < 10
               const isSelected = selectedIds.has(p.id)
               return (
@@ -1154,6 +1199,36 @@ function TransfertTab({
             })}
           </tbody>
         </table>
+
+        {transferTotalPages > 1 && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 12,
+              padding: '16px 0'
+            }}
+          >
+            <button
+              className="btn-edit"
+              disabled={transferPage === 0}
+              onClick={() => setTransferPage((p) => p - 1)}
+            >
+              ← Précédent
+            </button>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+              {transferPage + 1} / {transferTotalPages} ({filteredProducts.length} produits)
+            </span>
+            <button
+              className="btn-edit"
+              disabled={transferPage >= transferTotalPages - 1}
+              onClick={() => setTransferPage((p) => p + 1)}
+            >
+              Suivant →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

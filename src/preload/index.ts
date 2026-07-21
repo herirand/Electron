@@ -9,6 +9,8 @@ const api = {
   deleteUser: (id: number) => ipcRenderer.invoke('users:delete', id),
 
   getProducts: () => ipcRenderer.invoke('products:getAll'),
+  searchProducts: (query: string, limit?: number) =>
+    ipcRenderer.invoke('products:search', { query, limit }),
   addProduct: (data: {
     name: string
     price: number
@@ -82,7 +84,6 @@ const api = {
   getAllTickets: () => ipcRenderer.invoke('tickets:getAll'),
   exportTicket: (saleId: number) => ipcRenderer.invoke('tickets:export', saleId),
 
-  resetDatabase: () => ipcRenderer.invoke('db:reset')
 }
 
 contextBridge.exposeInMainWorld('api', api)
