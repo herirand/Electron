@@ -69,21 +69,32 @@ const api = {
     cashier?: string,
     clientId?: number,
     isCredit?: boolean,
-    clientName?: string
-  ) => ipcRenderer.invoke('sales:create', { items, cashier, clientId, isCredit, clientName }),
-  getSales: () => ipcRenderer.invoke('sales:getAll'),
+    clientName?: string,
+    amountReceived?: number,
+    remise?: number
+  ) =>
+    ipcRenderer.invoke('sales:create', {
+      items,
+      cashier,
+      clientId,
+      isCredit,
+      clientName,
+      amountReceived,
+      remise
+    }),
+  getSales: (page?: number, limit?: number) => ipcRenderer.invoke('sales:getAll', { page, limit }),
   getTodaySales: () => ipcRenderer.invoke('sales:getToday'),
   getSalesByDate: (date: string) => ipcRenderer.invoke('sales:getByDate', date),
   getJournalierByMonth: (year: number, month: number) =>
     ipcRenderer.invoke('journalier:getByMonth', { year, month }),
-  getCredits: () => ipcRenderer.invoke('sales:getCredits'),
+  getCredits: (page?: number, limit?: number) =>
+    ipcRenderer.invoke('sales:getCredits', { page, limit }),
   payCredit: (saleId: number, validatedBy: string) =>
     ipcRenderer.invoke('sales:payCredit', { saleId, validatedBy }),
   openTicketsFolder: () => ipcRenderer.invoke('tickets:open'),
   getTicketContent: (saleId: number) => ipcRenderer.invoke('tickets:getContent', saleId),
   getAllTickets: () => ipcRenderer.invoke('tickets:getAll'),
-  exportTicket: (saleId: number) => ipcRenderer.invoke('tickets:export', saleId),
-
+  exportTicket: (saleId: number) => ipcRenderer.invoke('tickets:export', saleId)
 }
 
 contextBridge.exposeInMainWorld('api', api)

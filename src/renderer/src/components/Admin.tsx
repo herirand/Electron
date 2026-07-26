@@ -1,16 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import ProductForm from './ProductForm'
 import UserForm from './UserForm'
 import { getErrorMsg } from '../hooks/useApi'
 import { useDebounce } from '../hooks/useDebounce'
 
-type Tab =
-  | 'products'
-  | 'users'
-  | 'categories'
-  | 'clients'
-  | 'fournisseurs'
-  | 'transfert'
+type Tab = 'products' | 'users' | 'categories' | 'clients' | 'fournisseurs' | 'transfert'
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('products')
@@ -34,6 +28,7 @@ export default function Admin() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [productPage, setProductPage] = useState(0)
   const PAGE_SIZE = 50
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const searchResults = useMemo(() => {
     if (!debouncedSearch.trim()) return []
@@ -60,16 +55,22 @@ export default function Admin() {
   useEffect(() => {
     loadProducts()
     loadCategoryCounts()
-    loadUsers()
-    loadCategories()
-    loadClients()
-    loadFournisseurs()
   }, [loadProducts])
 
-  const showToast = (type: 'success' | 'error', msg: string) => {
+  useEffect(() => {
+    if (tab === 'users' && users.length === 0) loadUsers()
+    if (tab === 'categories' && categories.length === 0) loadCategories()
+    if (tab === 'clients' && clients.length === 0) loadClients()
+    if (tab === 'fournisseurs' && fournisseurs.length === 0) loadFournisseurs()
+  }, [tab])
+
+  const showToast = useCallback((type: 'success' | 'error', msg: string) => {
+    clearTimeout(toastTimer.current)
     setToast({ type, msg })
-    setTimeout(() => setToast(null), 3000)
-  }
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  useEffect(() => () => clearTimeout(toastTimer.current), [])
 
   const handleDeleteProduct = async (product: Product) => {
     if (!confirm(`Supprimer "${product.name}" ?`)) return
@@ -276,7 +277,7 @@ export default function Admin() {
                 </tr>
               )}
             </tbody>
-           </table>
+          </table>
 
           {productTotalPages > 1 && (
             <div
@@ -990,7 +991,11 @@ function TransfertTab({
 
   const transferTotalPages = Math.ceil(filteredProducts.length / TRANSFER_PAGE_SIZE)
   const paginatedTransferProducts = useMemo(
-    () => filteredProducts.slice(transferPage * TRANSFER_PAGE_SIZE, (transferPage + 1) * TRANSFER_PAGE_SIZE),
+    () =>
+      filteredProducts.slice(
+        transferPage * TRANSFER_PAGE_SIZE,
+        (transferPage + 1) * TRANSFER_PAGE_SIZE
+      ),
     [filteredProducts, transferPage]
   )
 
@@ -1230,231 +1235,6 @@ function TransfertTab({
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function CreditsTab({
-  onNotify
-}: {
-  onNotify: (type: 'success' | 'error', msg: string) => void
-}) {
-  const [credits, setCredits] = useState<Sale[]>([])
-  const [loading, setLoading] = useState(true)
-  const [validatingId, setValidatingId] = useState<number | null>(null)
-  const [validatedBy, setValidatedBy] = useState('')
-
-  const loadCredits = () => {
-    setLoading(true)
-    window.api.getCredits().then((data) => {
-      setCredits(data)
-      setLoading(false)
-    })
-  }
-
-  useEffect(() => {
-    loadCredits()
-  }, [])
-
-  const handlePayCredit = async (saleId: number) => {
-    if (!validatedBy.trim()) {
-      onNotify('error', 'Le nom du validateur est requis')
-      return
-    }
-    try {
-      await window.api.payCredit(saleId, validatedBy.trim())
-      onNotify('success', 'Crédit marqué comme payé')
-      setValidatingId(null)
-      setValidatedBy('')
-      loadCredits()
-    } catch (err) {
-      onNotify('error', getErrorMsg(err, 'Erreur lors de la validation'))
-    }
-  }
-
-  const pendingCredits = credits.filter((c) => c.status === 'credit')
-  const paidCredits = credits.filter((c) => c.status === 'paid' && c.paid_at)
-
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: 40 }}>Chargement...</div>
-  }
-
-  return (
-    <div>
-      <div className="admin-header">
-        <h2>Gestion des crédits</h2>
-      </div>
-
-      {pendingCredits.length > 0 && (
-        <div style={{ marginBottom: 30 }}>
-          <h3 style={{ fontSize: 16, color: 'var(--text-secondary)', marginBottom: 12 }}>
-            Crédits en attente ({pendingCredits.length})
-          </h3>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Vente #</th>
-                <th>Date</th>
-                <th>Client</th>
-                <th>Total</th>
-                <th>Bénéfice</th>
-                <th>Créé par</th>
-                <th>Articles</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingCredits.map((sale) => (
-                <tr key={sale.id}>
-                  <td style={{ color: 'var(--text-secondary)' }}>#{sale.id}</td>
-                  <td>
-                    {new Date(sale.created_at).toLocaleDateString('fr-FR', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric'
-                    })}
-                  </td>
-                  <td>
-                    <strong>{sale.client_name || sale.client_nom || '—'}</strong>
-                  </td>
-                  <td style={{ color: 'var(--danger)', fontWeight: 600 }}>
-                    {sale.total.toLocaleString()} Ar
-                  </td>
-                  <td style={{ color: 'var(--text-secondary)' }}>
-                    {sale.benefice.toLocaleString()} Ar
-                  </td>
-                  <td>{sale.created_by || sale.cashier}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-secondary)', maxWidth: 200 }}>
-                    {Array.isArray(sale.items) &&
-                      sale.items
-                        .filter(Boolean)
-                        .map((item) => `${item.name} ×${item.quantity}`)
-                        .join(', ')}
-                  </td>
-                  <td>
-                    {validatingId === sale.id ? (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          value={validatedBy}
-                          onChange={(e) => setValidatedBy(e.target.value)}
-                          placeholder="Validé par..."
-                          style={{
-                            padding: '4px 8px',
-                            border: '1px solid var(--border)',
-                            borderRadius: 4,
-                            fontSize: 12,
-                            width: 120
-                          }}
-                          autoFocus
-                        />
-                        <button
-                          className="btn-add"
-                          style={{ padding: '4px 10px', fontSize: 12 }}
-                          onClick={() => handlePayCredit(sale.id)}
-                        >
-                          ✓
-                        </button>
-                        <button
-                          className="btn-edit"
-                          style={{ padding: '4px 10px', fontSize: 12 }}
-                          onClick={() => {
-                            setValidatingId(null)
-                            setValidatedBy('')
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        className="btn-add"
-                        style={{ background: 'var(--success)' }}
-                        onClick={() => setValidatingId(sale.id)}
-                      >
-                        💰 Payer
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {pendingCredits.length === 0 && (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: 40,
-            color: 'var(--text-secondary)',
-            marginBottom: 30
-          }}
-        >
-          Aucun crédit en attente
-        </div>
-      )}
-
-      {paidCredits.length > 0 && (
-        <div>
-          <h3 style={{ fontSize: 16, color: 'var(--text-secondary)', marginBottom: 12 }}>
-            Crédits payés ({paidCredits.length})
-          </h3>
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Vente #</th>
-                <th>Date création</th>
-                <th>Client</th>
-                <th>Total</th>
-                <th>Créé par</th>
-                <th>Payé le</th>
-                <th>Validé par</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paidCredits.map((sale) => (
-                <tr key={sale.id}>
-                  <td style={{ color: 'var(--text-secondary)' }}>#{sale.id}</td>
-                  <td>
-                    {new Date(sale.created_at).toLocaleDateString('fr-FR', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric'
-                    })}
-                  </td>
-                  <td>
-                    <strong>{sale.client_name || sale.client_nom || '—'}</strong>
-                  </td>
-                  <td style={{ color: 'var(--success)', fontWeight: 600 }}>
-                    {sale.total.toLocaleString()} Ar
-                  </td>
-                  <td>{sale.created_by || sale.cashier}</td>
-                  <td>
-                    {sale.paid_at
-                      ? new Date(sale.paid_at).toLocaleDateString('fr-FR', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      : '—'}
-                  </td>
-                  <td>{sale.validated_by || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {paidCredits.length === 0 && pendingCredits.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>
-          Aucun crédit dans le système
-        </div>
-      )}
     </div>
   )
 }

@@ -1,8 +1,10 @@
 // seed.js
 // Usage :
-//   node seed.js                          → seed ./pos.db avec bsl.xlsx
-//   node seed.js ./custom.xlsx            → seed ./pos.db avec le fichier spécifié
-//   node seed.js ./custom.xlsx ./out.db   → seed le fichier DB spécifié
+//   npx electron seed.js                      → seed ./pos.db avec bsl.xlsx
+//   npx electron seed.js ./custom.xlsx        → seed ./pos.db avec le fichier spécifié
+//   npx electron seed.js ./custom.xlsx out.db → seed le fichier DB spécifié
+//   npx electron seed.js --clean              → vider la DB sans réimporter
+//   npx electron seed.js --clean ./custom.xlsx out.db → clean puis seed
 //
 // Combine clear + import + schema + index + admin user en une seule passe.
 
@@ -11,22 +13,30 @@ const fs = require('fs')
 const { createHash } = require('crypto')
 
 // --- Args -----------------------------------------------------------
-const EXCEL_PATH = process.argv[2] || path.join(__dirname, 'bsl.xlsx')
-const DB_PATH = process.argv[3] || path.join(__dirname, 'pos.db')
+const args = process.argv.slice(2)
+const cleanOnly = args.includes('--clean')
+const filteredArgs = args.filter((a) => a !== '--clean')
+
+const EXCEL_PATH = filteredArgs[0] || path.join(__dirname, 'bsl.xlsx')
+const { app } = require('electron')
+app.name = 'pos-app'
+const DB_PATH = filteredArgs[1] || path.join(app.getPath('userData'), 'pos.db')
 
 // --- Vérifications ---------------------------------------------------
-if (!fs.existsSync(EXCEL_PATH)) {
+if (!cleanOnly && !fs.existsSync(EXCEL_PATH)) {
   console.error(`Fichier Excel introuvable : ${EXCEL_PATH}`)
   process.exit(1)
 }
 
 // --- XLSX (lazy require pour message d'erreur propre) ---------------
 let XLSX
-try {
-  XLSX = require('xlsx')
-} catch {
-  console.error('xlsx non installé. Lancez : npm install')
-  process.exit(1)
+if (!cleanOnly) {
+  try {
+    XLSX = require('xlsx')
+  } catch {
+    console.error('xlsx non installé. Lancez : npm install')
+    process.exit(1)
+  }
 }
 
 // --- better-sqlite3 --------------------------------------------------
@@ -44,23 +54,25 @@ function hashPassword(password) {
 }
 
 // --- Lecture Excel ----------------------------------------------------
-const workbook = XLSX.readFile(EXCEL_PATH)
-const sheet = workbook.Sheets[workbook.SheetNames[0]]
-const rows = XLSX.utils.sheet_to_json(sheet, { defval: null })
+let rows = []
+if (!cleanOnly) {
+  const workbook = XLSX.readFile(EXCEL_PATH)
+  const sheet = workbook.Sheets[workbook.SheetNames[0]]
+  rows = XLSX.utils.sheet_to_json(sheet, { defval: null })
 
-if (rows.length === 0) {
-  console.error('Le fichier Excel est vide ou n\'a pas de feuille de données.')
-  process.exit(1)
-}
+  if (rows.length === 0) {
+    console.error("Le fichier Excel est vide ou n'a pas de feuille de données.")
+    process.exit(1)
+  }
 
-// Vérifier les colonnes attendues
-const sampleRow = rows[0]
-const requiredCols = ['PRODUITS', 'P.V']
-const missingCols = requiredCols.filter((c) => !(c in sampleRow))
-if (missingCols.length > 0) {
-  console.error(`Colonnes manquantes dans l'Excel : ${missingCols.join(', ')}`)
-  console.error(`Colonnes trouvées : ${Object.keys(sampleRow).join(', ')}`)
-  process.exit(1)
+  const sampleRow = rows[0]
+  const requiredCols = ['PRODUITS', 'P.V']
+  const missingCols = requiredCols.filter((c) => !(c in sampleRow))
+  if (missingCols.length > 0) {
+    console.error(`Colonnes manquantes dans l'Excel : ${missingCols.join(', ')}`)
+    console.error(`Colonnes trouvées : ${Object.keys(sampleRow).join(', ')}`)
+    process.exit(1)
+  }
 }
 
 // --- Connexion DB + Schema -------------------------------------------
@@ -69,7 +81,7 @@ db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = OFF')
 
 console.log(`Base : ${DB_PATH}`)
-console.log(`Excel : ${EXCEL_PATH} (${rows.length} lignes)`)
+if (!cleanOnly) console.log(`Excel : ${EXCEL_PATH} (${rows.length} lignes)`)
 
 // --- Création du schema (même schema que database.ts) ----------------
 db.exec(`
@@ -129,7 +141,8 @@ db.exec(`
     created_by TEXT,
     paid_at DATETIME,
     validated_by TEXT,
-    was_credit INTEGER NOT NULL DEFAULT 0
+    was_credit INTEGER NOT NULL DEFAULT 0,
+    remise REAL NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS sale_items (
@@ -158,8 +171,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_products_famille ON products(famille_id);
   CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
   CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(code_barre);
+  CREATE INDEX IF NOT EXISTS idx_products_famille_name ON products(famille_id, name);
   CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
   CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
+  CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(date(created_at));
   CREATE INDEX IF NOT EXISTS idx_sales_was_credit ON sales(was_credit);
 `)
 
@@ -186,6 +201,21 @@ const clearAll = db.transaction(() => {
 
 clearAll()
 console.log('Tables vidées.')
+
+if (cleanOnly) {
+  // Mode clean only : réinsérer admin par défaut
+  const insertUser = db.prepare(
+    'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)'
+  )
+  insertUser.run('admin', hashPassword('1806soa'), 'admin')
+  console.log('Admin par défaut : admin / 1806soa')
+  db.close()
+  console.log(`Clean terminé → ${DB_PATH}`)
+  try {
+    if (app && app.quit) app.quit()
+  } catch {}
+  process.exit(0)
+}
 
 // --- Import produits --------------------------------------------------
 const insertProduct = db.prepare(`
@@ -232,7 +262,6 @@ console.log(`Seed terminé → ${DB_PATH}`)
 
 // Quitter Electron si exécuté via `npx electron seed.js`
 try {
-  const { app } = require('electron')
   if (app && app.quit) app.quit()
 } catch {
   // Pas en mode Electron, rien à faire

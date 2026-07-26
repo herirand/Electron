@@ -88,7 +88,7 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               min="0"
-              step="50"
+              step="1"
             />
           </div>
 
@@ -99,7 +99,7 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
               value={purchasePrice}
               onChange={(e) => setPurchasePrice(e.target.value)}
               min="0"
-              step="50"
+              step="1"
             />
           </div>
 

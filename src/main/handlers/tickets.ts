@@ -1,33 +1,37 @@
 import { IpcMain, shell, dialog, BrowserWindow } from 'electron'
 import { app } from 'electron'
 import { join } from 'path'
-import { mkdirSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { mkdirSync, existsSync, readdirSync } from 'fs'
+import { readFile, writeFile } from 'fs/promises'
 
 export function registerTicketHandlers(ipcMain: IpcMain): void {
-  ipcMain.handle('tickets:open', () => {
+  ipcMain.handle('tickets:open', async () => {
     const dir = join(app.getPath('userData'), 'tickets')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     shell.openPath(dir)
   })
 
-  ipcMain.handle('tickets:getContent', (_event, saleId: number) => {
+  ipcMain.handle('tickets:getContent', async (_event, saleId: number) => {
     const dir = join(app.getPath('userData'), 'tickets')
     const filePath = join(dir, `vente_${saleId}.txt`)
     if (!existsSync(filePath)) return null
-    return readFileSync(filePath, 'utf-8')
+    return readFile(filePath, 'utf-8')
   })
 
-  ipcMain.handle('tickets:getAll', () => {
+  ipcMain.handle('tickets:getAll', async () => {
     const dir = join(app.getPath('userData'), 'tickets')
     if (!existsSync(dir)) return []
     const files = readdirSync(dir).filter((f) => f.startsWith('vente_') && f.endsWith('.txt'))
-    return files
-      .map((f) => {
+
+    const results = await Promise.all(
+      files.map(async (f) => {
         const saleId = parseInt(f.replace('vente_', '').replace('.txt', ''), 10)
-        const content = readFileSync(join(dir, f), 'utf-8')
+        const content = await readFile(join(dir, f), 'utf-8')
         return { saleId, content }
       })
-      .sort((a, b) => b.saleId - a.saleId)
+    )
+
+    return results.sort((a, b) => b.saleId - a.saleId)
   })
 
   ipcMain.handle('tickets:export', async (_event, saleId: number) => {
@@ -35,7 +39,7 @@ export function registerTicketHandlers(ipcMain: IpcMain): void {
     const filePath = join(dir, `vente_${saleId}.txt`)
     if (!existsSync(filePath)) throw new Error('Ticket introuvable')
 
-    const content = readFileSync(filePath, 'utf-8')
+    const content = await readFile(filePath, 'utf-8')
     const win = BrowserWindow.getFocusedWindow()
     const result = await dialog.showSaveDialog(win!, {
       title: 'Exporter le ticket',
@@ -44,7 +48,7 @@ export function registerTicketHandlers(ipcMain: IpcMain): void {
     })
 
     if (result.canceled || !result.filePath) return { success: false }
-    writeFileSync(result.filePath, content, 'utf-8')
+    await writeFile(result.filePath, content, 'utf-8')
     return { success: true, path: result.filePath }
   })
 }

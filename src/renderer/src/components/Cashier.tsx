@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, memo } from 'react'
 import { getErrorMsg } from '../hooks/useApi'
 import { useDebounce } from '../hooks/useDebounce'
 
@@ -13,6 +13,61 @@ interface CartItem {
 }
 
 type CashierTab = 'caisse' | 'credits'
+
+const CartRow = memo(function CartRow({ item, onClick }: { item: CartItem; onClick: () => void }) {
+  return (
+    <tr onClick={onClick}>
+      <td>{item.product.name}</td>
+      <td>{item.product.price.toLocaleString()} Ar</td>
+      <td>{item.quantity}</td>
+      <td>{(item.product.price * item.quantity).toLocaleString()} Ar</td>
+    </tr>
+  )
+})
+
+const SearchResultRow = memo(function SearchResultRow({
+  product,
+  selected,
+  onToggle
+}: {
+  product: Product
+  selected: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className={`search-result-row ${selected ? 'selected' : ''}`} onClick={onToggle}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 4,
+            border: '1.5px solid var(--border)',
+            background: selected ? 'var(--text-primary)' : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}
+        >
+          {selected && (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M5 13l4 4L19 7"
+                stroke="white"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
+        </span>
+        {product.name}
+      </span>
+      <span>{product.price.toLocaleString()} Ar</span>
+    </div>
+  )
+})
 
 export default function Cashier({ user, view }: CashierProps) {
   return (
@@ -37,6 +92,9 @@ function CaisseTab({ user }: { user: User }) {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [isCredit, setIsCredit] = useState(false)
   const [creditClientName, setCreditClientName] = useState('')
+  const [amountReceived, setAmountReceived] = useState('')
+  const [discountApproved, setDiscountApproved] = useState(false)
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
     window.api.getClients().then(setClients)
@@ -60,10 +118,17 @@ function CaisseTab({ user }: { user: User }) {
     [cart]
   )
 
-  const showToast = (type: 'success' | 'error', msg: string) => {
+  const requestedDiscount = amountReceived ? Math.max(0, total - parseFloat(amountReceived)) : 0
+  const effectiveTotal = discountApproved ? total - requestedDiscount : total
+  const change = amountReceived ? parseFloat(amountReceived) - effectiveTotal : null
+
+  const showToast = useCallback((type: 'success' | 'error', msg: string) => {
+    clearTimeout(toastTimer.current)
     setToast({ type, msg })
-    setTimeout(() => setToast(null), 3000)
-  }
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  useEffect(() => () => clearTimeout(toastTimer.current), [])
 
   const handleAdd = () => {
     if (selectedIds.size === 0) return
@@ -108,6 +173,17 @@ function CaisseTab({ user }: { user: User }) {
       showToast('error', 'Le nom du client est requis pour un crédit')
       return
     }
+    if (!isCredit) {
+      const received = parseFloat(amountReceived)
+      if (isNaN(received) || received <= 0) {
+        showToast('error', 'Veuillez entrer le montant reçu')
+        return
+      }
+      if (received < total && !discountApproved) {
+        showToast('error', 'Montant insuffisant — une remise doit être autorisée')
+        return
+      }
+    }
     setLoading(true)
     try {
       await window.api.createSale(
@@ -119,13 +195,17 @@ function CaisseTab({ user }: { user: User }) {
         user.username,
         selectedClientId || undefined,
         isCredit,
-        isCredit ? creditClientName.trim() : undefined
+        isCredit ? creditClientName.trim() : undefined,
+        isCredit ? undefined : parseFloat(amountReceived) || undefined,
+        discountApproved ? requestedDiscount : undefined
       )
       showToast('success', isCredit ? 'Crédit enregistré' : 'Vente enregistrée')
       setCart([])
       setSelectedClientId(null)
       setIsCredit(false)
       setCreditClientName('')
+      setAmountReceived('')
+      setDiscountApproved(false)
     } catch (err) {
       showToast('error', getErrorMsg(err, 'Erreur lors de la vente'))
     } finally {
@@ -147,18 +227,14 @@ function CaisseTab({ user }: { user: User }) {
           </thead>
           <tbody>
             {cart.map((item) => (
-              <tr
+              <CartRow
                 key={item.product.id}
+                item={item}
                 onClick={() => {
                   setEditingItem(item)
                   setEditQty(item.quantity)
                 }}
-              >
-                <td>{item.product.name}</td>
-                <td>{item.product.price.toLocaleString()} Ar</td>
-                <td>{item.quantity}</td>
-                <td>{(item.product.price * item.quantity).toLocaleString()} Ar</td>
-              </tr>
+              />
             ))}
             {cart.length === 0 && (
               <tr>
@@ -193,6 +269,97 @@ function CaisseTab({ user }: { user: User }) {
             </div>
           )}
         </div>
+
+        {!isCredit && cart.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ position: 'relative' }}>
+              <input
+                type="number"
+                value={amountReceived}
+                onChange={(e) => {
+                  setAmountReceived(e.target.value)
+                  setDiscountApproved(false)
+                }}
+                placeholder="Montant reçu du client..."
+                min="0"
+                step="1"
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  fontSize: 14,
+                  border:
+                    change !== null && change < 0
+                      ? '1.5px solid var(--danger)'
+                      : '1.5px solid var(--border)',
+                  borderRadius: 30,
+                  outline: 'none'
+                }}
+              />
+            </div>
+            {change !== null && !discountApproved && requestedDiscount > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div
+                  className="cashier-total-row"
+                  style={{
+                    background: 'rgba(234,179,8,0.08)',
+                    borderColor: '#eab308',
+                    color: '#b45309'
+                  }}
+                >
+                  <span>Remise demandée</span>
+                  <span>- {requestedDiscount.toLocaleString()} Ar</span>
+                </div>
+                {user.role === 'admin' ? (
+                  <button
+                    onClick={() => setDiscountApproved(true)}
+                    style={{
+                      marginTop: 8,
+                      width: '100%',
+                      padding: '10px',
+                      border: '1.5px solid var(--success)',
+                      borderRadius: 30,
+                      background: 'rgba(34,197,94,0.1)',
+                      color: 'var(--success)',
+                      fontWeight: 700,
+                      fontSize: 13,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Autoriser la remise
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: '10px 16px',
+                      borderRadius: 20,
+                      fontSize: 12,
+                      textAlign: 'center',
+                      background: 'rgba(234,179,8,0.08)',
+                      color: '#92400e'
+                    }}
+                  >
+                    Demandez à un administrateur
+                  </div>
+                )}
+              </div>
+            )}
+            {change !== null && (discountApproved || requestedDiscount <= 0) && (
+              <div
+                className="cashier-total-row"
+                style={{
+                  marginTop: 8,
+                  background: change >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
+                  borderColor: change >= 0 ? 'var(--success)' : 'var(--danger)',
+                  color: change >= 0 ? 'var(--success)' : 'var(--danger)'
+                }}
+              >
+                <span>Monnaie</span>
+                <span>{change >= 0 ? `${change.toLocaleString()} Ar` : 'Montant insuffisant'}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {isCredit && (
           <div style={{ marginTop: 12 }}>
@@ -310,10 +477,11 @@ function CaisseTab({ user }: { user: User }) {
         {results.length > 0 && (
           <div className="search-results">
             {results.map((p) => (
-              <div
+              <SearchResultRow
                 key={p.id}
-                className={`search-result-row ${selectedIds.has(p.id) ? 'selected' : ''}`}
-                onClick={() => {
+                product={p}
+                selected={selectedIds.has(p.id)}
+                onToggle={() => {
                   setSelectedIds((prev) => {
                     const next = new Set(prev)
                     if (next.has(p.id)) {
@@ -324,37 +492,7 @@ function CaisseTab({ user }: { user: User }) {
                     return next
                   })
                 }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 4,
-                      border: '1.5px solid var(--border)',
-                      background: selectedIds.has(p.id) ? 'var(--text-primary)' : 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}
-                  >
-                    {selectedIds.has(p.id) && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M5 13l4 4L19 7"
-                          stroke="white"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </span>
-                  {p.name}
-                </span>
-                <span>{p.price.toLocaleString()} Ar</span>
-              </div>
+              />
             ))}
           </div>
         )}
@@ -399,30 +537,37 @@ function CashierCreditsTab({ user }: { user: User }) {
   const [loading, setLoading] = useState(true)
   const [validatingId, setValidatingId] = useState<number | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
-
-  const loadCredits = () => {
-    setLoading(true)
-    window.api.getCredits().then((data) => {
-      setCredits(data)
-      setLoading(false)
-    })
-  }
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
-    loadCredits()
+    let active = true
+    setLoading(true)
+    window.api.getCredits().then((data) => {
+      if (active) {
+        setCredits(data)
+        setLoading(false)
+      }
+    })
+    return () => {
+      active = false
+    }
   }, [])
 
-  const showToast = (type: 'success' | 'error', msg: string) => {
+  const showToast = useCallback((type: 'success' | 'error', msg: string) => {
+    clearTimeout(toastTimer.current)
     setToast({ type, msg })
-    setTimeout(() => setToast(null), 3000)
-  }
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  useEffect(() => () => clearTimeout(toastTimer.current), [])
 
   const handlePayCredit = async (saleId: number) => {
     try {
       await window.api.payCredit(saleId, user.username)
       showToast('success', 'Crédit marqué comme payé')
       setValidatingId(null)
-      loadCredits()
+      const data = await window.api.getCredits()
+      setCredits(data)
     } catch (err) {
       showToast('error', getErrorMsg(err, 'Erreur lors de la validation'))
     }

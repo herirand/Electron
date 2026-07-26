@@ -5,30 +5,69 @@ import { join } from 'path'
 import { writeFileSync, mkdirSync, existsSync } from 'fs'
 import { generateTicket } from '../utils/ticket'
 
+const SALES_BASE_QUERY = `
+  SELECT s.*,
+    c.nom as client_nom,
+    GROUP_CONCAT(
+      json_object('name', COALESCE(p.name, 'Produit supprimé'), 'quantity', si.quantity, 'unit_price', si.unit_price)
+    ) as items_json
+  FROM sales s
+  LEFT JOIN clients c ON c.id = s.client_id
+  LEFT JOIN sale_items si ON si.sale_id = s.id
+  LEFT JOIN products p ON p.id = si.product_id
+`
+
+function parseSalesRows(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return rows.map((sale) => {
+    const raw = (sale as { items_json: string | null }).items_json
+    return {
+      ...sale,
+      items: raw ? JSON.parse(`[${raw}]`) : []
+    }
+  })
+}
+
 export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle(
     'sales:create',
-    (
+    async (
       _event,
       {
         items,
         cashier,
         clientId,
         isCredit,
-        clientName
+        clientName,
+        amountReceived,
+        remise
       }: {
         items: { productId: number; quantity: number; unitPrice: number }[]
         cashier?: string
         clientId?: number
         isCredit?: boolean
         clientName?: string
+        amountReceived?: number
+        remise?: number
       }
     ) => {
+      const getProduct = db.prepare(
+        'SELECT stock_boutique, name, purchase_price FROM products WHERE id = ?'
+      )
+
+      const itemDetails: {
+        name: string
+        stock: number
+        purchasePrice: number
+        quantity: number
+        unitPrice: number
+        productId: number
+      }[] = []
+
       const createSale = db.transaction(() => {
         for (const item of items) {
-          const product = db
-            .prepare('SELECT stock_boutique, name FROM products WHERE id = ?')
-            .get(item.productId) as { stock_boutique: number; name: string } | undefined
+          const product = getProduct.get(item.productId) as
+            | { stock_boutique: number; name: string; purchase_price: number }
+            | undefined
 
           if (!product) throw new Error(`Produit ${item.productId} introuvable`)
           if (product.stock_boutique < item.quantity) {
@@ -36,28 +75,28 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
               `Stock insuffisant pour ${product.name} (${product.stock_boutique} disponible)`
             )
           }
+          itemDetails.push({
+            name: product.name,
+            stock: product.stock_boutique,
+            purchasePrice: product.purchase_price,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            productId: item.productId
+          })
         }
 
-        const total = items.reduce(
-          (sum: number, i: { unitPrice: number; quantity: number }) =>
-            sum + i.unitPrice * i.quantity,
-          0
-        )
+        const total = itemDetails.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0)
 
         let benefice = 0
-        for (const item of items) {
-          const product = db
-            .prepare('SELECT purchase_price FROM products WHERE id = ?')
-            .get(item.productId) as { purchase_price: number } | undefined
-          if (product) {
-            benefice += (item.unitPrice - product.purchase_price) * item.quantity
-          }
+        for (const i of itemDetails) {
+          benefice += (i.unitPrice - i.purchasePrice) * i.quantity
         }
+        benefice -= remise || 0
 
         const sale = db
           .prepare(
-            `INSERT INTO sales (total, benefice, cashier, client_id, status, client_name, created_by, was_credit)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO sales (total, benefice, cashier, client_id, status, client_name, created_by, was_credit, remise)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .run(
             total,
@@ -67,18 +106,20 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
             isCredit ? 'credit' : 'paid',
             clientName || null,
             cashier || 'caisse',
-            isCredit ? 1 : 0
+            isCredit ? 1 : 0,
+            remise || 0
           )
 
-        for (const item of items) {
-          db.prepare(
-            'INSERT INTO sale_items (sale_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)'
-          ).run(sale.lastInsertRowid, item.productId, item.quantity, item.unitPrice)
+        const insertItem = db.prepare(
+          'INSERT INTO sale_items (sale_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)'
+        )
+        const updateStock = db.prepare(
+          'UPDATE products SET stock_boutique = stock_boutique - ? WHERE id = ?'
+        )
 
-          db.prepare('UPDATE products SET stock_boutique = stock_boutique - ? WHERE id = ?').run(
-            item.quantity,
-            item.productId
-          )
+        for (const i of itemDetails) {
+          insertItem.run(sale.lastInsertRowid, i.productId, i.quantity, i.unitPrice)
+          updateStock.run(i.quantity, i.productId)
         }
 
         return { saleId: sale.lastInsertRowid, total }
@@ -89,20 +130,22 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
       const ticketsDir = join(app.getPath('userData'), 'tickets')
       if (!existsSync(ticketsDir)) mkdirSync(ticketsDir, { recursive: true })
 
-      const itemsWithNames = items.map(
-        (item: { productId: number; quantity: number; unitPrice: number }) => {
-          const product = db
-            .prepare('SELECT name FROM products WHERE id = ?')
-            .get(item.productId) as { name: string }
-          return {
-            productName: product.name,
-            quantity: item.quantity,
-            totalPrice: item.unitPrice * item.quantity
-          }
-        }
-      )
+      const itemsWithNames = itemDetails.map((i) => ({
+        productName: i.name,
+        quantity: i.quantity,
+        totalPrice: i.unitPrice * i.quantity
+      }))
 
-      const ticket = generateTicket(result.saleId, itemsWithNames, result.total)
+      const change =
+        amountReceived != null ? amountReceived - (result.total - (remise || 0)) : undefined
+      const ticket = generateTicket(
+        result.saleId,
+        itemsWithNames,
+        result.total,
+        amountReceived,
+        change,
+        remise || 0
+      )
       writeFileSync(join(ticketsDir, `vente_${result.saleId}.txt`), ticket, 'utf-8')
 
       if (!isCredit) {
@@ -113,90 +156,45 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
     }
   )
 
-  ipcMain.handle('sales:getAll', () => {
-    const sales = db
-      .prepare(
-        `
-      SELECT s.*,
-        c.nom as client_nom,
-        GROUP_CONCAT(
-          json_object('name', COALESCE(p.name, 'Produit supprimé'), 'quantity', si.quantity, 'unit_price', si.unit_price)
-        ) as items_json
-      FROM sales s
-      LEFT JOIN clients c ON c.id = s.client_id
-      LEFT JOIN sale_items si ON si.sale_id = s.id
-      LEFT JOIN products p ON p.id = si.product_id
-      GROUP BY s.id
-      ORDER BY s.created_at DESC
-      `
-      )
-      .all()
-    return (sales as Array<Record<string, unknown>>).map((sale) => {
-      const raw = (sale as { items_json: string | null }).items_json
-      return {
-        ...sale,
-        items: raw ? JSON.parse(`[${raw}]`) : []
-      }
-    })
-  })
+  ipcMain.handle(
+    'sales:getAll',
+    (_event, { page = 0, limit = 50 }: { page?: number; limit?: number } = {}) => {
+      const offset = page * limit
+      const rows = db
+        .prepare(
+          `${SALES_BASE_QUERY}
+           GROUP BY s.id
+           ORDER BY s.created_at DESC
+           LIMIT ? OFFSET ?`
+        )
+        .all(limit, offset) as Array<Record<string, unknown>>
+      return parseSalesRows(rows)
+    }
+  )
 
   ipcMain.handle('sales:getToday', () => {
     const today = new Date().toISOString().split('T')[0]
-    const sales = db
+    const rows = db
       .prepare(
-        `
-      SELECT s.*,
-        c.nom as client_nom,
-        GROUP_CONCAT(
-          json_object('name', COALESCE(p.name, 'Produit supprimé'), 'quantity', si.quantity, 'unit_price', si.unit_price)
-        ) as items_json
-      FROM sales s
-      LEFT JOIN clients c ON c.id = s.client_id
-      LEFT JOIN sale_items si ON si.sale_id = s.id
-      LEFT JOIN products p ON p.id = si.product_id
-      WHERE date(s.created_at) = ?
-      GROUP BY s.id
-      ORDER BY s.created_at DESC
-      `
+        `${SALES_BASE_QUERY}
+         WHERE date(s.created_at) = ?
+         GROUP BY s.id
+         ORDER BY s.created_at DESC`
       )
-      .all(today)
-
-    return (sales as Array<Record<string, unknown>>).map((sale) => {
-      const raw = (sale as { items_json: string | null }).items_json
-      return {
-        ...sale,
-        items: raw ? JSON.parse(`[${raw}]`) : []
-      }
-    })
+      .all(today) as Array<Record<string, unknown>>
+    return parseSalesRows(rows)
   })
 
   ipcMain.handle('sales:getByDate', (_event, date: string) => {
-    const sales = db
+    const rows = db
       .prepare(
-        `
-      SELECT s.*,
-        c.nom as client_nom,
-        GROUP_CONCAT(
-          json_object('name', COALESCE(p.name, 'Produit supprimé'), 'quantity', si.quantity, 'unit_price', si.unit_price)
-        ) as items_json
-      FROM sales s
-      LEFT JOIN clients c ON c.id = s.client_id
-      LEFT JOIN sale_items si ON si.sale_id = s.id
-      LEFT JOIN products p ON p.id = si.product_id
-      WHERE date(s.created_at) = ?
-      GROUP BY s.id
-      ORDER BY s.created_at DESC
-      `
+        `${SALES_BASE_QUERY}
+         WHERE date(s.created_at) = ?
+         GROUP BY s.id
+         ORDER BY s.created_at DESC`
       )
-      .all(date)
-
-    return (sales as Array<Record<string, unknown>>).map((sale) => {
-      const raw = (sale as { items_json: string | null }).items_json
-      return {
-        ...sale,
-        items: raw ? JSON.parse(`[${raw}]`) : []
-      }
-    })
+      .all(date) as Array<Record<string, unknown>>
+    return parseSalesRows(rows)
   })
 
   ipcMain.handle(
@@ -232,33 +230,22 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
     }
   )
 
-  ipcMain.handle('sales:getCredits', () => {
-    const sales = db
-      .prepare(
-        `
-      SELECT s.*,
-        c.nom as client_nom,
-        GROUP_CONCAT(
-          json_object('name', COALESCE(p.name, 'Produit supprimé'), 'quantity', si.quantity, 'unit_price', si.unit_price)
-        ) as items_json
-      FROM sales s
-      LEFT JOIN clients c ON c.id = s.client_id
-      LEFT JOIN sale_items si ON si.sale_id = s.id
-      LEFT JOIN products p ON p.id = si.product_id
-      WHERE s.was_credit = 1
-      GROUP BY s.id
-      ORDER BY s.created_at DESC
-      `
-      )
-      .all()
-    return (sales as Array<Record<string, unknown>>).map((sale) => {
-      const raw = (sale as { items_json: string | null }).items_json
-      return {
-        ...sale,
-        items: raw ? JSON.parse(`[${raw}]`) : []
-      }
-    })
-  })
+  ipcMain.handle(
+    'sales:getCredits',
+    (_event, { page = 0, limit = 100 }: { page?: number; limit?: number } = {}) => {
+      const offset = page * limit
+      const rows = db
+        .prepare(
+          `${SALES_BASE_QUERY}
+           WHERE s.was_credit = 1
+           GROUP BY s.id
+           ORDER BY s.created_at DESC
+           LIMIT ? OFFSET ?`
+        )
+        .all(limit, offset) as Array<Record<string, unknown>>
+      return parseSalesRows(rows)
+    }
+  )
 
   ipcMain.handle(
     'sales:payCredit',

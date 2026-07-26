@@ -3,9 +3,24 @@ import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  main: {},
+  main: {
+    build: {
+      rollupOptions: {
+        external: ['better-sqlite3']
+      }
+    }
+  },
   preload: {},
   renderer: {
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom']
+          }
+        }
+      }
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src')

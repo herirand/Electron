@@ -8,6 +8,12 @@ const db = new Database(dbPath)
 
 db.pragma('journal_mode = WAL')
 db.pragma('synchronous = NORMAL')
+db.pragma('cache_size = -64000') // 64MB page cache (défaut: 2MB)
+db.pragma('temp_store = MEMORY') // Tables temporaires en RAM
+db.pragma('mmap_size = 268435456') // 256MB memory-mapped I/O
+db.pragma('busy_timeout = 5000') // 5s attente lock au lieu de SQLITE_BUSY
+db.pragma('journal_size_limit = 67108864') // Limiter WAL à 64MB
+db.pragma('foreign_keys = ON') // Activer les contraintes FK
 
 function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex')
@@ -98,8 +104,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_products_famille ON products(famille_id);
   CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
   CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(code_barre);
+  CREATE INDEX IF NOT EXISTS idx_products_famille_name ON products(famille_id, name);
   CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
   CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
+  CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(date(created_at));
   CREATE INDEX IF NOT EXISTS idx_sales_was_credit ON sales(was_credit);
 `)
 
@@ -154,6 +162,9 @@ if (!salesInfo.some((col) => col.name === 'validated_by')) {
 }
 if (!salesInfo.some((col) => col.name === 'was_credit')) {
   db.exec(`ALTER TABLE sales ADD COLUMN was_credit INTEGER NOT NULL DEFAULT 0`)
+}
+if (!salesInfo.some((col) => col.name === 'remise')) {
+  db.exec(`ALTER TABLE sales ADD COLUMN remise REAL NOT NULL DEFAULT 0`)
 }
 
 const insertUser = db.prepare(

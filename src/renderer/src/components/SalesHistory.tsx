@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 const MONTHS_FR = [
   'Janvier',
@@ -78,10 +78,19 @@ export default function SalesHistory() {
   const loading = loadedMonth !== monthKey
   const dayLoading = selectedDate !== null && dayDate !== selectedDate
 
-  const daysByDate = new Map((monthData?.days ?? []).map((j) => [j.date, j]))
+  const daysByDate = useMemo(
+    () => new Map((monthData?.days ?? []).map((j) => [j.date, j])),
+    [monthData]
+  )
 
-  const monthDays = getDaysInMonth(currentMonth.year, currentMonth.month)
-  const startOffset = getFirstDayOfWeek(currentMonth.year, currentMonth.month)
+  const monthDays = useMemo(
+    () => getDaysInMonth(currentMonth.year, currentMonth.month),
+    [currentMonth.year, currentMonth.month]
+  )
+  const startOffset = useMemo(
+    () => getFirstDayOfWeek(currentMonth.year, currentMonth.month),
+    [currentMonth.year, currentMonth.month]
+  )
 
   const prevMonth = (): void => {
     setCurrentMonth((prev) => {

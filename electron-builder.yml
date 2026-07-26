@@ -9,11 +9,12 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-asarUnpack:
-  - resources/**
+  - '!*.db'
+  - '!seed.js'
+  - '!bsl.xlsx'
 win:
   executableName: BazarSoa
-  icon: resources/icon.ico
+  icon: icon.ico
 nsis:
   artifactName: BazarSoa-${version}-setup.${ext}
   shortcutName: BazarSoa

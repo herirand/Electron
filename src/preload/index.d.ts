@@ -154,16 +154,18 @@ interface CashierAPI {
     cashier?: string,
     clientId?: number,
     isCredit?: boolean,
-    clientName?: string
+    clientName?: string,
+    amountReceived?: number,
+    remise?: number
   ): Promise<{ saleId: number; total: number }>
-  getSales(): Promise<Sale[]>
+  getSales(page?: number, limit?: number): Promise<Sale[]>
   getTodaySales(): Promise<Sale[]>
   getSalesByDate(date: string): Promise<Sale[]>
   getJournalierByMonth(
     year: number,
     month: number
   ): Promise<{ days: Journalier[]; total: number; benefice: number; jour_ventes: number }>
-  getCredits(): Promise<Sale[]>
+  getCredits(page?: number, limit?: number): Promise<Sale[]>
   payCredit(saleId: number, validatedBy: string): Promise<{ success: boolean }>
   openTicketsFolder(): Promise<void>
   getTicketContent(saleId: number): Promise<string | null>
