@@ -77,6 +77,8 @@ export default function SalesHistory() {
 
   const loading = loadedMonth !== monthKey
   const dayLoading = selectedDate !== null && dayDate !== selectedDate
+  // MODIFIÉ : ne lister que les ventes encaissées — cohérent avec le total du calendrier (journalier)
+  const paidSales = daySales.filter((s) => s.status === 'paid')
 
   const daysByDate = useMemo(
     () => new Map((monthData?.days ?? []).map((j) => [j.date, j])),
@@ -220,11 +222,11 @@ export default function SalesHistory() {
                 <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)' }}>
                   Chargement...
                 </div>
-              ) : daySales.length === 0 ? (
-                <div className="day-panel-empty">Aucune vente ce jour</div>
+              ) : paidSales.length === 0 ? (
+                <div className="day-panel-empty">Aucune vente encaissée ce jour</div>
               ) : (
                 <div className="sales-list">
-                  {daySales.map((sale) => (
+                  {paidSales.map((sale) => (
                     <div key={sale.id} className="sale-card">
                       <div className="sale-header">
                         <span>Vente #{sale.id}</span>

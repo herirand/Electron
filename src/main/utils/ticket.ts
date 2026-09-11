@@ -4,7 +4,9 @@ export function generateTicket(
   total: number,
   amountReceived?: number,
   change?: number,
-  remise: number = 0
+  remise: number = 0,
+  // NOUVEAU : mention « À CRÉDIT » sur le ticket des ventes à crédit
+  isCredit: boolean = false
 ): string {
   const now = new Date()
   const date = now.toLocaleDateString('fr-FR')
@@ -32,6 +34,12 @@ export function generateTicket(
     ticket += `║ Remise              ${String('-' + remise).padStart(8)} Ar║\n`
     const aPayer = total - remise
     ticket += `║ A payer             ${String(aPayer).padStart(8)} Ar║\n`
+  }
+
+  // NOUVEAU : ticket de vente à crédit — le montant reste dû
+  if (isCredit) {
+    ticket += '║        À CRÉDIT              ║\n'
+    ticket += `║ Reste a payer      ${String(total).padStart(8)} Ar║\n`
   }
 
   if (amountReceived != null && !isNaN(amountReceived)) {

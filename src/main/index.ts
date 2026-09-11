@@ -11,6 +11,9 @@ import { registerCategoryHandlers } from './handlers/categories'
 import { registerClientHandlers } from './handlers/clients'
 import { registerFournisseurHandlers } from './handlers/fournisseurs'
 
+// NOUVEAU : tout le process principal raisonne en heure Madagascar (Antananarivo, UTC+3, sans DST)
+process.env.TZ = 'Indian/Antananarivo'
+
 registerAuthHandlers(ipcMain, db)
 registerProductHandlers(ipcMain, db)
 registerSalesHandlers(ipcMain, db)

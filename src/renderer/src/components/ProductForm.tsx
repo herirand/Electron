@@ -12,8 +12,9 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
   const [price, setPrice] = useState(String(product?.price || ''))
   const [purchasePrice, setPurchasePrice] = useState(String(product?.purchase_price || ''))
   const [familleId, setFamilleId] = useState<number | ''>(product?.famille_id || '')
-  const [stockBoutique, setStockBoutique] = useState(String(product?.stock_boutique || '0'))
-  const [stockEntrepot, setStockEntrepot] = useState(String(product?.stock_entrepot || '0'))
+  // MODIFIÉ : en édition, les champs stock démarrent vides (saisie = quantité à ajouter)
+  const [stockBoutique, setStockBoutique] = useState(product ? '' : '0')
+  const [stockEntrepot, setStockEntrepot] = useState(product ? '' : '0')
   const [codeBarre, setCodeBarre] = useState(product?.code_barre || '')
   const [familles, setFamilles] = useState<Famille[]>([])
   const [loading, setLoading] = useState(false)
@@ -50,7 +51,13 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
       }
 
       if (isEdit && product) {
-        await window.api.updateProduct({ id: product.id, ...data })
+        // MODIFIÉ : le stock saisi s'ajoute au stock actuel (ex : actuel 4 + saisi 5 = 9)
+        await window.api.updateProduct({
+          id: product.id,
+          ...data,
+          stock_boutique: product.stock_boutique + sbNum,
+          stock_entrepot: product.stock_entrepot + seNum
+        })
       } else {
         await window.api.addProduct(data)
       }
@@ -117,21 +124,31 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
 
           <div style={{ display: 'flex', gap: 12 }}>
             <div className="form-group" style={{ flex: 1 }}>
-              <label>Stock boutique</label>
+              <label>
+                {isEdit
+                  ? `Ajouter au stock boutique (actuel : ${product?.stock_boutique})`
+                  : 'Stock boutique'}
+              </label>
               <input
                 type="number"
                 value={stockBoutique}
                 onChange={(e) => setStockBoutique(e.target.value)}
                 min="0"
+                placeholder={isEdit ? 'Quantité à ajouter' : '0'}
               />
             </div>
             <div className="form-group" style={{ flex: 1 }}>
-              <label>Stock entrepôt</label>
+              <label>
+                {isEdit
+                  ? `Ajouter au stock entrepôt (actuel : ${product?.stock_entrepot})`
+                  : 'Stock entrepôt'}
+              </label>
               <input
                 type="number"
                 value={stockEntrepot}
                 onChange={(e) => setStockEntrepot(e.target.value)}
                 min="0"
+                placeholder={isEdit ? 'Quantité à ajouter' : '0'}
               />
             </div>
           </div>
