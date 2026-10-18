@@ -12,7 +12,7 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
   const [price, setPrice] = useState(String(product?.price || ''))
   const [purchasePrice, setPurchasePrice] = useState(String(product?.purchase_price || ''))
   const [familleId, setFamilleId] = useState<number | ''>(product?.famille_id || '')
-  // MODIFIÉ : en édition, les champs stock démarrent vides (saisie = quantité à ajouter)
+  // MODIFIÉ : en édition, les champs stock démarrent vides (saisie = delta à ajouter OU retirer, ex : -3)
   const [stockBoutique, setStockBoutique] = useState(product ? '' : '0')
   const [stockEntrepot, setStockEntrepot] = useState(product ? '' : '0')
   const [codeBarre, setCodeBarre] = useState(product?.code_barre || '')
@@ -51,12 +51,23 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
       }
 
       if (isEdit && product) {
-        // MODIFIÉ : le stock saisi s'ajoute au stock actuel (ex : actuel 4 + saisi 5 = 9)
+        // MODIFIÉ : le stock saisi est un delta signé — on peut ajouter (+5) ou retirer (-3) du stock
+        const newStockBoutique = product.stock_boutique + sbNum
+        const newStockEntrepot = product.stock_entrepot + seNum
+        // MODIFIÉ : garde anti-négatif — refuse le retrait si le stock est insuffisant
+        if (newStockBoutique < 0)
+          throw new Error(
+            `Stock boutique insuffisant pour ce retrait (disponible : ${product.stock_boutique})`
+          )
+        if (newStockEntrepot < 0)
+          throw new Error(
+            `Stock entrepôt insuffisant pour ce retrait (disponible : ${product.stock_entrepot})`
+          )
         await window.api.updateProduct({
           id: product.id,
           ...data,
-          stock_boutique: product.stock_boutique + sbNum,
-          stock_entrepot: product.stock_entrepot + seNum
+          stock_boutique: newStockBoutique,
+          stock_entrepot: newStockEntrepot
         })
       } else {
         await window.api.addProduct(data)
@@ -126,29 +137,31 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
             <div className="form-group" style={{ flex: 1 }}>
               <label>
                 {isEdit
-                  ? `Ajouter au stock boutique (actuel : ${product?.stock_boutique})`
+                  ? `Stock boutique — ajouter ou retirer (actuel : ${product?.stock_boutique})`
                   : 'Stock boutique'}
               </label>
               <input
                 type="number"
                 value={stockBoutique}
                 onChange={(e) => setStockBoutique(e.target.value)}
-                min="0"
-                placeholder={isEdit ? 'Quantité à ajouter' : '0'}
+                // MODIFIÉ : en édition, min à -stock actuel pour autoriser le retrait (ex : -3)
+                min={isEdit ? -(product?.stock_boutique ?? 0) : '0'}
+                placeholder={isEdit ? 'Ex : 5 ou -3' : '0'}
               />
             </div>
             <div className="form-group" style={{ flex: 1 }}>
               <label>
                 {isEdit
-                  ? `Ajouter au stock entrepôt (actuel : ${product?.stock_entrepot})`
+                  ? `Stock entrepôt — ajouter ou retirer (actuel : ${product?.stock_entrepot})`
                   : 'Stock entrepôt'}
               </label>
               <input
                 type="number"
                 value={stockEntrepot}
                 onChange={(e) => setStockEntrepot(e.target.value)}
-                min="0"
-                placeholder={isEdit ? 'Quantité à ajouter' : '0'}
+                // MODIFIÉ : en édition, min à -stock actuel pour autoriser le retrait (ex : -3)
+                min={isEdit ? -(product?.stock_entrepot ?? 0) : '0'}
+                placeholder={isEdit ? 'Ex : 5 ou -3' : '0'}
               />
             </div>
           </div>
