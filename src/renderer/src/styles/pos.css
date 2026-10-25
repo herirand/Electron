@@ -914,3 +914,7 @@ body {
 .finance-amount-depot { color: var(--text-secondary); font-weight: 600; }
 .finance-summary { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 14px; padding: 14px 18px; background: var(--bg-card); border: 1.5px solid var(--border); border-radius: 12px; font-size: 14px; }
 .finance-summary strong { font-weight: 700; }
+.finance-transfer-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.finance-transfer-form input { flex: 1; min-width: 240px; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px; font-family: inherit; }
+.finance-transfer-form input:focus { outline: none; border-color: var(--brand-yellow); box-shadow: 0 0 0 3px rgba(245, 183, 49, 0.25); }
+.finance-transfer-hint { margin-top: 8px; font-size: 13px; color: var(--text-secondary); }

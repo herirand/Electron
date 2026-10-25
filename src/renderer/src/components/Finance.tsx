@@ -29,7 +29,7 @@ function formatMontant(value: number): string {
   return `${value.toLocaleString()} Ar`
 }
 
-type ModalKind = 'expense' | 'depot'
+type ModalKind = 'expense'
 
 interface FinanceProps {
   user: User
@@ -45,6 +45,10 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<ModalKind | null>(null)
   const [tab, setTab] = useState<'journal' | 'transfert'>('journal')
+  // NOUVEAU : saisie directe du transfert dans la section Transfert
+  const [transferAmount, setTransferAmount] = useState('')
+  const [transferError, setTransferError] = useState('')
+  const [transferLoading, setTransferLoading] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -150,6 +154,34 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
       showToast('success', 'Dépense supprimée')
     } catch (err) {
       showToast('error', getErrorMsg(err, 'Erreur lors de la suppression'))
+    }
+  }
+
+  // NOUVEAU : valide et enregistre le transfert directement depuis la section
+  const handleTransfer = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    if (transferLoading) return
+    const value = Number(transferAmount)
+    if (!Number.isFinite(value) || value <= 0) {
+      setTransferError('Saisissez un montant supérieur à 0.')
+      return
+    }
+    const solde = caisse?.espece ?? 0
+    if (value > solde) {
+      setTransferError(`Montant supérieur au solde espèce disponible (${formatMontant(solde)}).`)
+      return
+    }
+    setTransferError('')
+    setTransferLoading(true)
+    try {
+      await window.api.addFinanceDepot({ montant: value, createdBy: user.username })
+      setTransferAmount('')
+      await reloadData()
+      showToast('success', 'Transfert enregistré')
+    } catch (err) {
+      setTransferError(getErrorMsg(err, 'Erreur lors du transfert'))
+    } finally {
+      setTransferLoading(false)
     }
   }
 
@@ -290,13 +322,6 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
             }}
           >
             <h3 style={{ fontSize: 16, color: 'var(--text-secondary)' }}>Soldes disponibles</h3>
-            <button
-              className="btn-add"
-              onClick={() => setModal('depot')}
-              disabled={loading || (caisse?.espece ?? 0) <= 0}
-            >
-              Dépôt
-            </button>
           </div>
 
           <div className="finance-cards">
@@ -313,6 +338,40 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
               <div className="finance-card-value">{formatMontant(caisse?.total ?? 0)}</div>
             </div>
           </div>
+
+          <div className="admin-header" style={{ marginTop: 28 }}>
+            <h3 style={{ fontSize: 16, color: 'var(--text-secondary)' }}>Nouveau transfert</h3>
+          </div>
+
+          <form className="finance-transfer-form" onSubmit={handleTransfer}>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="Montant à transférer (Ar)"
+              value={transferAmount}
+              onChange={(e) => {
+                setTransferError('')
+                setTransferAmount(e.target.value.replace(/[^0-9]/g, ''))
+              }}
+              aria-label="Montant à transférer en Ariary"
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              className="btn-add"
+              disabled={transferLoading || transferAmount === ''}
+            >
+              {transferLoading ? 'Transfert...' : 'Transférer vers la banque'}
+            </button>
+          </form>
+          <p className="finance-transfer-hint">
+            Solde espèce disponible : <strong>{formatMontant(caisse?.espece ?? 0)}</strong>
+          </p>
+          {transferError && (
+            <div className="error-msg" style={{ marginTop: 10 }}>
+              {transferError}
+            </div>
+          )}
 
           <div className="admin-header" style={{ marginTop: 28 }}>
             <h3 style={{ fontSize: 16, color: 'var(--text-secondary)' }}>
@@ -360,15 +419,6 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
       {modal === 'expense' && (
         <ExpenseModal user={user} onClose={() => setModal(null)} onSaved={handleSaved} />
       )}
-      {modal === 'depot' && (
-        <DepositModal
-          user={user}
-          soldeEspece={caisse?.espece ?? 0}
-          onClose={() => setModal(null)}
-          onSaved={handleSaved}
-        />
-      )}
-
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
@@ -456,86 +506,6 @@ function ExpenseModal({
               <option value="espece">Espèce</option>
               <option value="banque">Banque</option>
             </select>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Annuler
-            </button>
-            <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Enregistrement...' : 'Enregistrer'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-// NOUVEAU : modale de dépôt vers la caisse
-function DepositModal({
-  user,
-  soldeEspece,
-  onClose,
-  onSaved
-}: {
-  user: User
-  soldeEspece: number
-  onClose: () => void
-  onSaved: (msg: string) => void
-}): React.JSX.Element {
-  const [montant, setMontant] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault()
-    if (loading) return
-    const value = Number(montant)
-    if (!Number.isFinite(value) || value <= 0) {
-      setError('Le montant doit être supérieur à 0.')
-      return
-    }
-    if (value > soldeEspece) {
-      setError('Le montant ne peut pas dépasser le solde espèce.')
-      return
-    }
-    setError('')
-    setLoading(true)
-    try {
-      await window.api.addFinanceDepot({ montant: value, createdBy: user.username })
-      onSaved('Dépôt enregistré')
-    } catch (err) {
-      setError(getErrorMsg(err, "Erreur lors de l'enregistrement"))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Nouveau dépôt</h3>
-        <p style={{ marginBottom: 16, color: 'var(--text-secondary)', fontSize: 14 }}>
-          Solde espèce disponible : <strong>{formatMontant(soldeEspece)}</strong>
-        </p>
-        {error && (
-          <div className="error-msg" style={{ marginBottom: 12 }}>
-            {error}
-          </div>
-        )}
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Montant (Ar)</label>
-            <input
-              type="number"
-              value={montant}
-              onChange={(e) => setMontant(e.target.value)}
-              min={1}
-              max={soldeEspece}
-              step={1}
-              autoFocus
-              required
-            />
           </div>
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
