@@ -124,6 +124,33 @@ db.exec(`
     montant REAL NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  -- NOUVEAU : livraisons fournisseurs (dette payable par livraison)
+  CREATE TABLE IF NOT EXISTS livraisons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fournisseur_id INTEGER NOT NULL REFERENCES fournisseurs(id) ON DELETE RESTRICT,
+    montant REAL NOT NULL CHECK (montant > 0),
+    reference TEXT DEFAULT NULL,
+    date_livraison DATE NOT NULL,
+    date_echeance DATE DEFAULT NULL,
+    statut TEXT NOT NULL DEFAULT 'impayee' CHECK (statut IN ('impayee', 'payee')),
+    paid_at DATETIME DEFAULT NULL,
+    paid_by TEXT DEFAULT NULL,
+    created_by TEXT DEFAULT NULL,
+    created_at DATETIME NOT NULL
+  );
+
+  -- NOUVEAU : audit des paiements fournisseurs + lien vers la dépense caisse
+  CREATE TABLE IF NOT EXISTS paiements_fournisseurs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    livraison_id INTEGER NOT NULL UNIQUE REFERENCES livraisons(id) ON DELETE RESTRICT,
+    fournisseur_id INTEGER NOT NULL REFERENCES fournisseurs(id) ON DELETE RESTRICT,
+    montant REAL NOT NULL CHECK (montant > 0),
+    mode TEXT NOT NULL CHECK (mode IN ('espece', 'banque')) DEFAULT 'espece',
+    depense_id INTEGER REFERENCES depenses(id) ON DELETE SET NULL,
+    paid_at DATETIME NOT NULL,
+    paid_by TEXT DEFAULT NULL
+  );
 `)
 
 db.exec(`
@@ -137,6 +164,11 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sales_was_credit ON sales(was_credit);
   CREATE INDEX IF NOT EXISTS idx_depenses_date ON depenses(date);
   CREATE INDEX IF NOT EXISTS idx_depots_date ON depots(date);
+  CREATE INDEX IF NOT EXISTS idx_livraisons_fournisseur ON livraisons(fournisseur_id);
+  CREATE INDEX IF NOT EXISTS idx_livraisons_statut ON livraisons(statut);
+  CREATE INDEX IF NOT EXISTS idx_livraisons_echeance ON livraisons(date_echeance);
+  CREATE INDEX IF NOT EXISTS idx_paiements_fournisseurs_livraison ON paiements_fournisseurs(livraison_id);
+  CREATE INDEX IF NOT EXISTS idx_paiements_fournisseurs_fournisseur ON paiements_fournisseurs(fournisseur_id);
 `)
 
 const tableInfo = db.prepare("PRAGMA table_info('products')").all() as { name: string }[]

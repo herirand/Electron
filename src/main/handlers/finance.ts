@@ -253,6 +253,12 @@ export function registerFinanceHandlers(ipcMain: IpcMain, db: Database.Database)
   )
 
   ipcMain.handle('finance:deleteDepense', (_event, id: number) => {
+    // NOUVEAU : une dépense générée par un paiement fournisseur ne doit pas être supprimée à la main
+    const linked = db.prepare('SELECT 1 FROM paiements_fournisseurs WHERE depense_id = ?').get(id)
+    if (linked) {
+      throw new Error('Dépense liée à un paiement fournisseur : suppression interdite')
+    }
+
     const result = db.prepare('DELETE FROM depenses WHERE id = ?').run(id)
     if (result.changes === 0) throw new Error('Dépense introuvable')
     return { success: true }

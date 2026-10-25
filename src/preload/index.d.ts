@@ -66,6 +66,53 @@ interface FournisseurProduit {
   produit_nom: string
 }
 
+// NOUVEAU : livraisons / paiement fournisseur
+interface Livraison {
+  id: number
+  fournisseur_id: number
+  fournisseur_nom: string
+  montant: number
+  reference: string | null
+  date_livraison: string
+  date_echeance: string | null
+  statut: 'impayee' | 'payee'
+  paid_at: string | null
+  paid_by: string | null
+  created_by: string | null
+  created_at: string
+  en_retard: number
+}
+
+interface LivraisonStats {
+  totalImpaye: number
+  totalEnRetard: number
+  nbImpayees: number
+  nbEnRetard: number
+  payeesMois: number
+}
+
+interface LivraisonFilters {
+  fournisseurId?: number
+  statut?: 'impayee' | 'payee'
+  enRetard?: boolean
+  dateFrom?: string
+  dateTo?: string
+}
+
+interface PaiementFournisseur {
+  id: number
+  livraison_id: number
+  fournisseur_id: number
+  fournisseur_nom: string
+  montant: number
+  mode: 'espece' | 'banque'
+  depense_id: number | null
+  paid_at: string
+  paid_by: string | null
+  reference: string | null
+  date_livraison: string
+}
+
 interface Journalier {
   id: number
   date: string
@@ -183,6 +230,36 @@ interface CashierAPI {
     fournisseurId: number,
     produitIds: number[]
   ): Promise<{ success: boolean }>
+
+  getLivraisons(filters?: LivraisonFilters): Promise<Livraison[]>
+  getLivraisonStats(): Promise<LivraisonStats>
+  addLivraison(data: {
+    fournisseurId: number
+    montant: number
+    reference?: string
+    dateLivraison?: string
+    dateEcheance?: string
+    createdBy?: string
+  }): Promise<{ lastInsertRowid: number }>
+  updateLivraison(data: {
+    id: number
+    fournisseurId: number
+    montant: number
+    reference?: string
+    dateLivraison?: string
+    dateEcheance?: string
+  }): Promise<{ changes: number }>
+  deleteLivraison(id: number): Promise<{ success: boolean }>
+  payerLivraison(data: {
+    id: number
+    mode: 'espece' | 'banque'
+    paidBy?: string
+  }): Promise<{ success: boolean; depenseId: number }>
+  getPaiementsFournisseurs(filters?: {
+    fournisseurId?: number
+    dateFrom?: string
+    dateTo?: string
+  }): Promise<PaiementFournisseur[]>
 
   createSale(
     items: { productId: number; quantity: number; unitPrice: number }[],

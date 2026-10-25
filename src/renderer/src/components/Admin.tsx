@@ -1,10 +1,18 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import ProductForm from './ProductForm'
 import UserForm from './UserForm'
+import LivraisonsTab from './LivraisonsTab'
 import { getErrorMsg } from '../hooks/useApi'
 import { useDebounce } from '../hooks/useDebounce'
 
-type Tab = 'products' | 'users' | 'categories' | 'clients' | 'fournisseurs' | 'transfert'
+type Tab =
+  | 'products'
+  | 'users'
+  | 'categories'
+  | 'clients'
+  | 'fournisseurs'
+  | 'transfert'
+  | 'livraisons'
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('products')
@@ -133,6 +141,7 @@ export default function Admin() {
     { key: 'categories', label: 'Catégories', icon: '🏷' },
     { key: 'clients', label: 'Clients', icon: '👤' },
     { key: 'fournisseurs', label: 'Fournisseurs', icon: '🚚' },
+    { key: 'livraisons', label: 'Livraisons', icon: '🧾' },
     { key: 'users', label: 'Utilisateurs', icon: '👥' }
   ]
 
@@ -354,6 +363,8 @@ export default function Admin() {
           onDelete={handleDeleteFournisseur}
         />
       )}
+
+      {tab === 'livraisons' && <LivraisonsTab onNotify={showToast} />}
 
       {tab === 'users' && (
         <>

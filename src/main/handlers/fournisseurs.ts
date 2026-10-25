@@ -38,8 +38,19 @@ export function registerFournisseurHandlers(ipcMain: IpcMain, db: Database.Datab
   )
 
   ipcMain.handle('fournisseurs:delete', (_event, id: number) => {
-    db.prepare('DELETE FROM fournisseur_produits WHERE fournisseur_id = ?').run(id)
-    db.prepare('DELETE FROM fournisseurs WHERE id = ?').run(id)
+    // NOUVEAU : on interdit la suppression d'un fournisseur qui a des livraisons (historique comptable)
+    const row = db
+      .prepare('SELECT COUNT(*) AS count FROM livraisons WHERE fournisseur_id = ?')
+      .get(id) as { count: number }
+    if (row.count > 0) {
+      throw new Error('Impossible de supprimer : ce fournisseur possède des livraisons')
+    }
+
+    const remove = db.transaction(() => {
+      db.prepare('DELETE FROM fournisseur_produits WHERE fournisseur_id = ?').run(id)
+      db.prepare('DELETE FROM fournisseurs WHERE id = ?').run(id)
+    })
+    remove()
     return { success: true }
   })
 

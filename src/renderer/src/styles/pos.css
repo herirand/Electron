@@ -918,3 +918,66 @@ body {
 .finance-transfer-form input { flex: 1; min-width: 240px; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px; font-family: inherit; }
 .finance-transfer-form input:focus { outline: none; border-color: var(--brand-yellow); box-shadow: 0 0 0 3px rgba(245, 183, 49, 0.25); }
 .finance-transfer-hint { margin-top: 8px; font-size: 13px; color: var(--text-secondary); }
+
+/* ─── LIVRAISONS FOURNISSEURS ─── */
+.livraisons-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.livraisons-filters select,
+.livraisons-filters input[type='text'] {
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.livraisons-filters label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.livraison-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.livraison-badge.paid {
+  background: rgba(46, 204, 113, 0.15);
+  color: #27ae60;
+}
+
+.livraison-badge.unpaid {
+  background: rgba(245, 183, 49, 0.2);
+  color: #b8860b;
+}
+
+.livraison-badge.late {
+  background: rgba(231, 76, 60, 0.15);
+  color: #c0392b;
+}
+
+.btn-pay {
+  background: #3d5a80;
+  color: #fff;
+  margin-right: 6px;
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}

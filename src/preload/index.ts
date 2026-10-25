@@ -66,6 +66,40 @@ const api = {
   syncFournisseurProduits: (fournisseurId: number, produitIds: number[]) =>
     ipcRenderer.invoke('fournisseur-produits:sync', { fournisseurId, produitIds }),
 
+  // NOUVEAU : livraisons / paiement fournisseur
+  getLivraisons: (filters?: {
+    fournisseurId?: number
+    statut?: 'impayee' | 'payee'
+    enRetard?: boolean
+    dateFrom?: string
+    dateTo?: string
+  }) => ipcRenderer.invoke('livraisons:getAll', filters),
+  getLivraisonStats: () => ipcRenderer.invoke('livraisons:getStats'),
+  addLivraison: (data: {
+    fournisseurId: number
+    montant: number
+    reference?: string
+    dateLivraison?: string
+    dateEcheance?: string
+    createdBy?: string
+  }) => ipcRenderer.invoke('livraisons:add', data),
+  updateLivraison: (data: {
+    id: number
+    fournisseurId: number
+    montant: number
+    reference?: string
+    dateLivraison?: string
+    dateEcheance?: string
+  }) => ipcRenderer.invoke('livraisons:update', data),
+  deleteLivraison: (id: number) => ipcRenderer.invoke('livraisons:delete', id),
+  payerLivraison: (data: { id: number; mode: 'espece' | 'banque'; paidBy?: string }) =>
+    ipcRenderer.invoke('livraisons:payer', data),
+  getPaiementsFournisseurs: (filters?: {
+    fournisseurId?: number
+    dateFrom?: string
+    dateTo?: string
+  }) => ipcRenderer.invoke('livraisons:getPaiements', filters),
+
   createSale: (
     items: { productId: number; quantity: number; unitPrice: number }[],
     cashier?: string,
