@@ -103,6 +103,7 @@ db.exec(`
     price REAL NOT NULL,
     purchase_price REAL NOT NULL DEFAULT 0,
     famille_id INTEGER REFERENCES familles(id),
+    fournisseur_id INTEGER REFERENCES fournisseurs(id) ON DELETE SET NULL,
     photo TEXT DEFAULT NULL,
     code_barre TEXT DEFAULT NULL,
     stock_boutique INTEGER NOT NULL DEFAULT 0,
@@ -165,6 +166,31 @@ db.exec(`
     total_ventes REAL NOT NULL DEFAULT 0,
     benefice REAL NOT NULL DEFAULT 0
   );
+
+  CREATE TABLE IF NOT EXISTS depenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL,
+    motif TEXT NOT NULL,
+    montant REAL NOT NULL,
+    mode TEXT NOT NULL CHECK(mode IN ('espece','banque')) DEFAULT 'espece',
+    created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS depots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL,
+    montant REAL NOT NULL,
+    created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS recettes_journalieres (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL UNIQUE,
+    montant REAL NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `)
 
 db.exec(`
@@ -172,10 +198,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
   CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(code_barre);
   CREATE INDEX IF NOT EXISTS idx_products_famille_name ON products(famille_id, name);
+  CREATE INDEX IF NOT EXISTS idx_products_fournisseur ON products(fournisseur_id);
   CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
   CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
   CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(date(created_at));
   CREATE INDEX IF NOT EXISTS idx_sales_was_credit ON sales(was_credit);
+  CREATE INDEX IF NOT EXISTS idx_sales_effective_date ON sales(date(COALESCE(paid_at, created_at)));
+  CREATE INDEX IF NOT EXISTS idx_depenses_date ON depenses(date);
+  CREATE INDEX IF NOT EXISTS idx_depots_date ON depots(date);
 `)
 
 // --- Clear -----------------------------------------------------------
@@ -184,6 +214,9 @@ const tables = [
   'sales',
   'factures',
   'journalier',
+  'depenses',
+  'depots',
+  'recettes_journalieres',
   'fournisseur_produits',
   'products',
   'fournisseurs',

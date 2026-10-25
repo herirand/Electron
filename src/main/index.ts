@@ -10,6 +10,7 @@ import { registerTicketHandlers } from './handlers/tickets'
 import { registerCategoryHandlers } from './handlers/categories'
 import { registerClientHandlers } from './handlers/clients'
 import { registerFournisseurHandlers } from './handlers/fournisseurs'
+import { registerFinanceHandlers, startFinanceScheduler } from './handlers/finance'
 
 // NOUVEAU : tout le process principal raisonne en heure Madagascar (Antananarivo, UTC+3, sans DST)
 process.env.TZ = 'Indian/Antananarivo'
@@ -21,6 +22,9 @@ registerTicketHandlers(ipcMain)
 registerCategoryHandlers(ipcMain, db)
 registerClientHandlers(ipcMain, db)
 registerFournisseurHandlers(ipcMain, db)
+registerFinanceHandlers(ipcMain, db)
+// NOUVEAU : figement automatique des recettes journalières à minuit + rattrapage au démarrage
+startFinanceScheduler(db)
 
 app.whenReady().then(() => {
   const mainWindow = new BrowserWindow({

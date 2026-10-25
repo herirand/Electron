@@ -19,6 +19,7 @@ const api = {
     stock_boutique?: number
     stock_entrepot?: number
     code_barre?: string
+    fournisseur_id?: number
   }) => ipcRenderer.invoke('products:add', data),
   updateProduct: (data: {
     id: number
@@ -29,6 +30,7 @@ const api = {
     stock_boutique?: number
     stock_entrepot?: number
     code_barre?: string
+    fournisseur_id?: number
   }) => ipcRenderer.invoke('products:update', data),
   updateStock: (id: number, stock_boutique: number, stock_entrepot: number) =>
     ipcRenderer.invoke('products:updateStock', { id, stock_boutique, stock_entrepot }),
@@ -94,7 +96,21 @@ const api = {
   openTicketsFolder: () => ipcRenderer.invoke('tickets:open'),
   getTicketContent: (saleId: number) => ipcRenderer.invoke('tickets:getContent', saleId),
   getAllTickets: () => ipcRenderer.invoke('tickets:getAll'),
-  exportTicket: (saleId: number) => ipcRenderer.invoke('tickets:export', saleId)
+  exportTicket: (saleId: number) => ipcRenderer.invoke('tickets:export', saleId),
+
+  getFinanceJournal: (year: number, month: number) =>
+    ipcRenderer.invoke('finance:getJournal', { year, month }),
+  getFinanceCaisse: () => ipcRenderer.invoke('finance:getCaisse'),
+  getFinanceDepots: () => ipcRenderer.invoke('finance:getDepots'),
+  addFinanceDepense: (data: {
+    motif: string
+    montant: number
+    mode: 'espece' | 'banque'
+    createdBy?: string
+  }) => ipcRenderer.invoke('finance:addDepense', data),
+  deleteFinanceDepense: (id: number) => ipcRenderer.invoke('finance:deleteDepense', id),
+  addFinanceDepot: (data: { montant: number; createdBy?: string }) =>
+    ipcRenderer.invoke('finance:addDepot', data)
 }
 
 contextBridge.exposeInMainWorld('api', api)

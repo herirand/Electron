@@ -3,9 +3,12 @@ import Login from './components/Login'
 import Cashier from './components/Cashier'
 import Admin from './components/Admin'
 import SalesHistory from './components/SalesHistory'
+// NOUVEAU : page Finance (admin uniquement)
+import Finance from './components/Finance'
 import './styles/pos.css'
 
-type Page = 'caisse' | 'credits' | 'admin' | 'sales'
+// MODIFIÉ : ajout de la page finance
+type Page = 'caisse' | 'credits' | 'admin' | 'sales' | 'finance'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -33,6 +36,32 @@ export default function App() {
           </svg>
           Caisse
         </button>
+
+        {/* NOUVEAU : accès Finance réservé aux admins, juste après Caisse */}
+        {user.role === 'admin' && (
+          <button
+            className={`nav-pill ${page === 'finance' ? 'active' : ''}`}
+            onClick={() => setPage('finance')}
+          >
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M3 7C3 5.9 3.9 5 5 5H19C20.1 5 21 5.9 21 7V17C21 18.1 20.1 19 19 19H5C3.9 19 3 18.1 3 17V7Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M15 12H21V15H15C14.4 15 14 14.6 14 14V13C14 12.4 14.4 12 15 12Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Finance
+          </button>
+        )}
 
         <button
           className={`nav-pill ${page === 'credits' ? 'active' : ''}`}
@@ -105,6 +134,7 @@ export default function App() {
         {page === 'credits' && <Cashier user={user} view="credits" />}
         {page === 'admin' && user.role === 'admin' && <Admin />}
         {page === 'sales' && user.role === 'admin' && <SalesHistory />}
+        {page === 'finance' && user.role === 'admin' && <Finance user={user} />}
       </div>
     </div>
   )

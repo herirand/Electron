@@ -38,6 +38,7 @@ db.exec(`
     price REAL NOT NULL,
     purchase_price REAL NOT NULL DEFAULT 0,
     famille_id INTEGER REFERENCES familles(id),
+    fournisseur_id INTEGER REFERENCES fournisseurs(id) ON DELETE SET NULL,
     photo TEXT DEFAULT NULL,
     code_barre TEXT DEFAULT NULL,
     stock_boutique INTEGER NOT NULL DEFAULT 0,
@@ -98,6 +99,31 @@ db.exec(`
     total_ventes REAL NOT NULL DEFAULT 0,
     benefice REAL NOT NULL DEFAULT 0
   );
+
+  CREATE TABLE IF NOT EXISTS depenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL,
+    motif TEXT NOT NULL,
+    montant REAL NOT NULL,
+    mode TEXT NOT NULL CHECK(mode IN ('espece','banque')) DEFAULT 'espece',
+    created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS depots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL,
+    montant REAL NOT NULL,
+    created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS recettes_journalieres (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL UNIQUE,
+    montant REAL NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `)
 
 db.exec(`
@@ -109,6 +135,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
   CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(date(created_at));
   CREATE INDEX IF NOT EXISTS idx_sales_was_credit ON sales(was_credit);
+  CREATE INDEX IF NOT EXISTS idx_depenses_date ON depenses(date);
+  CREATE INDEX IF NOT EXISTS idx_depots_date ON depots(date);
 `)
 
 const tableInfo = db.prepare("PRAGMA table_info('products')").all() as { name: string }[]
@@ -116,6 +144,11 @@ const colNames = tableInfo.map((c) => c.name)
 
 if (!colNames.includes('famille_id')) {
   db.exec(`ALTER TABLE products ADD COLUMN famille_id INTEGER REFERENCES familles(id)`)
+}
+if (!colNames.includes('fournisseur_id')) {
+  db.exec(
+    `ALTER TABLE products ADD COLUMN fournisseur_id INTEGER REFERENCES fournisseurs(id) ON DELETE SET NULL`
+  )
 }
 if (!colNames.includes('photo')) {
   db.exec(`ALTER TABLE products ADD COLUMN photo TEXT DEFAULT NULL`)
@@ -132,6 +165,9 @@ if (!colNames.includes('stock_entrepot')) {
 if (!colNames.includes('purchase_price')) {
   db.exec(`ALTER TABLE products ADD COLUMN purchase_price REAL NOT NULL DEFAULT 0`)
 }
+// Index créé après la migration : la colonne peut ne pas exister sur une ancienne DB
+db.exec(`CREATE INDEX IF NOT EXISTS idx_products_fournisseur ON products(fournisseur_id)`)
+
 if (colNames.includes('quantity') && colNames.includes('stock_boutique')) {
   db.exec(
     `UPDATE products SET stock_boutique = quantity, stock_entrepot = 0 WHERE stock_boutique = 0 AND quantity > 0`
@@ -166,6 +202,10 @@ if (!salesInfo.some((col) => col.name === 'was_credit')) {
 if (!salesInfo.some((col) => col.name === 'remise')) {
   db.exec(`ALTER TABLE sales ADD COLUMN remise REAL NOT NULL DEFAULT 0`)
 }
+// NOUVEAU : index d'expression pour accélérer le journal Finance (créé après les migrations)
+db.exec(
+  `CREATE INDEX IF NOT EXISTS idx_sales_effective_date ON sales(date(COALESCE(paid_at, created_at)))`
+)
 
 const insertUser = db.prepare(
   'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)'

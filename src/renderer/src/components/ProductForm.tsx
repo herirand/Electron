@@ -12,11 +12,15 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
   const [price, setPrice] = useState(String(product?.price || ''))
   const [purchasePrice, setPurchasePrice] = useState(String(product?.purchase_price || ''))
   const [familleId, setFamilleId] = useState<number | ''>(product?.famille_id || '')
+  // NOUVEAU : fournisseur assigné au produit
+  const [fournisseurId, setFournisseurId] = useState<number | ''>(product?.fournisseur_id || '')
   // MODIFIÉ : en édition, les champs stock démarrent vides (saisie = delta à ajouter OU retirer, ex : -3)
   const [stockBoutique, setStockBoutique] = useState(product ? '' : '0')
   const [stockEntrepot, setStockEntrepot] = useState(product ? '' : '0')
   const [codeBarre, setCodeBarre] = useState(product?.code_barre || '')
   const [familles, setFamilles] = useState<Famille[]>([])
+  // NOUVEAU : liste des fournisseurs disponibles
+  const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -24,6 +28,8 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
 
   useEffect(() => {
     window.api.getCategories().then(setFamilles)
+    // NOUVEAU : charge les fournisseurs pour le select d'assignation
+    window.api.getFournisseurs().then(setFournisseurs)
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,6 +51,8 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
         price: priceNum,
         purchase_price: purchasePriceNum,
         famille_id: familleId || undefined,
+        // NOUVEAU : fournisseur sélectionné (undefined => désassigné)
+        fournisseur_id: fournisseurId || undefined,
         stock_boutique: sbNum,
         stock_entrepot: seNum,
         code_barre: codeBarre || undefined
@@ -126,6 +134,22 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
             <select value={familleId} onChange={(e) => setFamilleId(Number(e.target.value) || '')}>
               <option value="">Aucune catégorie</option>
               {familles.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.nom}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* NOUVEAU : assignation du produit à un fournisseur */}
+          <div className="form-group">
+            <label>Fournisseur</label>
+            <select
+              value={fournisseurId}
+              onChange={(e) => setFournisseurId(Number(e.target.value) || '')}
+            >
+              <option value="">Aucun fournisseur</option>
+              {fournisseurs.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.nom}
                 </option>

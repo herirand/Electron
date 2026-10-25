@@ -5,6 +5,8 @@ interface Product {
   purchase_price: number
   famille_id: number | null
   famille_nom: string | null
+  fournisseur_id: number | null
+  fournisseur_nom: string | null
   photo: string | null
   code_barre: string | null
   stock_boutique: number
@@ -71,6 +73,37 @@ interface Journalier {
   benefice: number
 }
 
+type FinanceTransactionType = 'revenue' | 'depense'
+
+interface FinanceJournalRow {
+  key: string
+  date: string
+  type: FinanceTransactionType
+  element: string
+  montant: number
+  ref_id: number | null
+}
+
+interface FinanceCaisse {
+  espece: number
+  banque: number
+  total: number
+}
+
+interface FinanceJournal {
+  rows: FinanceJournalRow[]
+  recettes: number
+  depenses: number
+}
+
+// NOUVEAU : historique des transferts vers la banque
+interface FinanceDepot {
+  id: number
+  date: string
+  montant: number
+  created_by: string | null
+}
+
 interface TransferSuggestion {
   id: number
   name: string
@@ -95,6 +128,7 @@ interface CashierAPI {
     stock_boutique?: number
     stock_entrepot?: number
     code_barre?: string
+    fournisseur_id?: number
   }): Promise<{ lastInsertRowid: number }>
   updateProduct(data: {
     id: number
@@ -105,6 +139,7 @@ interface CashierAPI {
     stock_boutique?: number
     stock_entrepot?: number
     code_barre?: string
+    fournisseur_id?: number
   }): Promise<{ changes: number }>
   updateStock(
     id: number,
@@ -165,6 +200,18 @@ interface CashierAPI {
     year: number,
     month: number
   ): Promise<{ days: Journalier[]; total: number; benefice: number; jour_ventes: number }>
+
+  getFinanceJournal(year: number, month: number): Promise<FinanceJournal>
+  getFinanceCaisse(): Promise<FinanceCaisse>
+  getFinanceDepots(): Promise<FinanceDepot[]>
+  addFinanceDepense(data: {
+    motif: string
+    montant: number
+    mode: 'espece' | 'banque'
+    createdBy?: string
+  }): Promise<{ lastInsertRowid: number }>
+  deleteFinanceDepense(id: number): Promise<{ success: boolean }>
+  addFinanceDepot(data: { montant: number; createdBy?: string }): Promise<{ success: boolean }>
   getCredits(page?: number, limit?: number): Promise<Sale[]>
   payCredit(saleId: number, validatedBy: string): Promise<{ success: boolean }>
   openTicketsFolder(): Promise<void>

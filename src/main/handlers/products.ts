@@ -1,7 +1,8 @@
 import { IpcMain } from 'electron'
 import Database from 'better-sqlite3'
 
-const LIST_COLUMNS = `p.id, p.name, p.price, p.purchase_price, p.famille_id, p.stock_boutique, p.stock_entrepot, p.code_barre, f.nom as famille_nom`
+// MODIFIÉ : ajout du fournisseur (id + nom) aux colonnes retournées
+const LIST_COLUMNS = `p.id, p.name, p.price, p.purchase_price, p.famille_id, p.fournisseur_id, p.stock_boutique, p.stock_entrepot, p.code_barre, f.nom as famille_nom, fr.nom as fournisseur_nom`
 
 export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('products:getAll', () => {
@@ -10,6 +11,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         `SELECT ${LIST_COLUMNS}
          FROM products p
          LEFT JOIN familles f ON f.id = p.famille_id
+         LEFT JOIN fournisseurs fr ON fr.id = p.fournisseur_id
          ORDER BY p.name`
       )
       .all()
@@ -26,7 +28,8 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         famille_id,
         stock_boutique,
         stock_entrepot,
-        code_barre
+        code_barre,
+        fournisseur_id
       }: {
         name: string
         price: number
@@ -35,13 +38,14 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         stock_boutique?: number
         stock_entrepot?: number
         code_barre?: string
+        fournisseur_id?: number
       }
     ) => {
       try {
         return db
           .prepare(
-            `INSERT INTO products (name, price, purchase_price, famille_id, stock_boutique, stock_entrepot, code_barre)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO products (name, price, purchase_price, famille_id, stock_boutique, stock_entrepot, code_barre, fournisseur_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .run(
             name,
@@ -50,7 +54,8 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
             famille_id || null,
             stock_boutique || 0,
             stock_entrepot || 0,
-            code_barre || null
+            code_barre || null,
+            fournisseur_id || null
           )
       } catch (err) {
         if (err instanceof Error && err.message.includes('UNIQUE constraint'))
@@ -72,7 +77,8 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         famille_id,
         stock_boutique,
         stock_entrepot,
-        code_barre
+        code_barre,
+        fournisseur_id
       }: {
         id: number
         name: string
@@ -82,13 +88,14 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         stock_boutique?: number
         stock_entrepot?: number
         code_barre?: string
+        fournisseur_id?: number
       }
     ) => {
       try {
         return db
           .prepare(
             `UPDATE products
-             SET name = ?, price = ?, purchase_price = ?, famille_id = ?, stock_boutique = ?, stock_entrepot = ?, code_barre = ?
+             SET name = ?, price = ?, purchase_price = ?, famille_id = ?, stock_boutique = ?, stock_entrepot = ?, code_barre = ?, fournisseur_id = ?
              WHERE id = ?`
           )
           .run(
@@ -99,6 +106,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
             stock_boutique || 0,
             stock_entrepot || 0,
             code_barre || null,
+            fournisseur_id || null,
             id
           )
       } catch (err) {
@@ -154,6 +162,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
           `SELECT ${LIST_COLUMNS}
            FROM products p
            LEFT JOIN familles f ON f.id = p.famille_id
+           LEFT JOIN fournisseurs fr ON fr.id = p.fournisseur_id
            WHERE p.name LIKE ? OR p.code_barre LIKE ?
            ORDER BY p.name
            LIMIT ?`
@@ -169,6 +178,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
           `SELECT ${LIST_COLUMNS}
            FROM products p
            LEFT JOIN familles f ON f.id = p.famille_id
+           LEFT JOIN fournisseurs fr ON fr.id = p.fournisseur_id
            ORDER BY p.name`
         )
         .all()
@@ -178,6 +188,7 @@ export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database)
         `SELECT ${LIST_COLUMNS}
          FROM products p
          LEFT JOIN familles f ON f.id = p.famille_id
+         LEFT JOIN fournisseurs fr ON fr.id = p.fournisseur_id
          WHERE p.famille_id = ?
          ORDER BY p.name`
       )

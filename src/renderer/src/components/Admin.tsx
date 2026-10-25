@@ -231,6 +231,7 @@ export default function Admin() {
                 <th>ID</th>
                 <th>Nom</th>
                 <th>Catégorie</th>
+                <th>Fournisseur</th>
                 <th>Prix</th>
                 <th>Prix d'achat</th>
                 <th>Boutique</th>
@@ -246,6 +247,9 @@ export default function Admin() {
                     <strong>{product.name}</strong>
                   </td>
                   <td style={{ color: 'var(--text-secondary)' }}>{product.famille_nom || '—'}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>
+                    {product.fournisseur_nom || '—'}
+                  </td>
                   <td style={{ color: 'var(--accent)', fontWeight: 600 }}>
                     {product.price.toLocaleString()} Ar
                   </td>
@@ -267,7 +271,7 @@ export default function Admin() {
               {filteredProducts.length === 0 && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 40 }}
                   >
                     {selectedCategoryId !== null
