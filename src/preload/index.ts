@@ -66,7 +66,7 @@ const api = {
   syncFournisseurProduits: (fournisseurId: number, produitIds: number[]) =>
     ipcRenderer.invoke('fournisseur-produits:sync', { fournisseurId, produitIds }),
 
-  // NOUVEAU : livraisons / paiement fournisseur
+  //  : livraisons / paiement fournisseur
   getLivraisons: (filters?: {
     fournisseurId?: number
     statut?: 'impayee' | 'payee'
@@ -143,6 +143,13 @@ const api = {
     createdBy?: string
   }) => ipcRenderer.invoke('finance:addDepense', data),
   deleteFinanceDepense: (id: number) => ipcRenderer.invoke('finance:deleteDepense', id),
+  addFinanceApport: (data: {
+    motif: string
+    montant: number
+    mode: 'espece' | 'banque'
+    createdBy?: string
+  }) => ipcRenderer.invoke('finance:addApport', data),
+  deleteFinanceApport: (id: number) => ipcRenderer.invoke('finance:deleteApport', id),
   addFinanceDepot: (data: { montant: number; createdBy?: string }) =>
     ipcRenderer.invoke('finance:addDepot', data)
 }

@@ -1,7 +1,7 @@
 import { IpcMain } from 'electron'
 import Database from 'better-sqlite3'
 
-// MODIFIÉ : ajout du fournisseur (id + nom) aux colonnes retournées
+//  : ajout du fournisseur (id + nom) aux colonnes retournées
 const LIST_COLUMNS = `p.id, p.name, p.price, p.purchase_price, p.famille_id, p.fournisseur_id, p.stock_boutique, p.stock_entrepot, p.code_barre, f.nom as famille_nom, fr.nom as fournisseur_nom`
 
 export function registerProductHandlers(ipcMain: IpcMain, db: Database.Database): void {

@@ -110,6 +110,16 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS apports_externes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date DATE NOT NULL,
+    motif TEXT NOT NULL,
+    montant REAL NOT NULL,
+    mode TEXT NOT NULL CHECK(mode IN ('espece','banque')) DEFAULT 'espece',
+    created_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS depots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     date DATE NOT NULL,
@@ -125,7 +135,7 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
-  -- NOUVEAU : livraisons fournisseurs (dette payable par livraison)
+  --  : livraisons fournisseurs (dette payable par livraison)
   CREATE TABLE IF NOT EXISTS livraisons (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     fournisseur_id INTEGER NOT NULL REFERENCES fournisseurs(id) ON DELETE RESTRICT,
@@ -140,7 +150,7 @@ db.exec(`
     created_at DATETIME NOT NULL
   );
 
-  -- NOUVEAU : audit des paiements fournisseurs + lien vers la dépense caisse
+  --  : audit des paiements fournisseurs + lien vers la dépense caisse
   CREATE TABLE IF NOT EXISTS paiements_fournisseurs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     livraison_id INTEGER NOT NULL UNIQUE REFERENCES livraisons(id) ON DELETE RESTRICT,
@@ -163,6 +173,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(date(created_at));
   CREATE INDEX IF NOT EXISTS idx_sales_was_credit ON sales(was_credit);
   CREATE INDEX IF NOT EXISTS idx_depenses_date ON depenses(date);
+  CREATE INDEX IF NOT EXISTS idx_apports_externes_date ON apports_externes(date);
   CREATE INDEX IF NOT EXISTS idx_depots_date ON depots(date);
   CREATE INDEX IF NOT EXISTS idx_livraisons_fournisseur ON livraisons(fournisseur_id);
   CREATE INDEX IF NOT EXISTS idx_livraisons_statut ON livraisons(statut);
@@ -234,7 +245,7 @@ if (!salesInfo.some((col) => col.name === 'was_credit')) {
 if (!salesInfo.some((col) => col.name === 'remise')) {
   db.exec(`ALTER TABLE sales ADD COLUMN remise REAL NOT NULL DEFAULT 0`)
 }
-// NOUVEAU : index d'expression pour accélérer le journal Finance (créé après les migrations)
+//  : index d'expression pour accélérer le journal Finance (créé après les migrations)
 db.exec(
   `CREATE INDEX IF NOT EXISTS idx_sales_effective_date ON sales(date(COALESCE(paid_at, created_at)))`
 )

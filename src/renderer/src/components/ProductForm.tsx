@@ -14,7 +14,7 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
   const [familleId, setFamilleId] = useState<number | ''>(product?.famille_id || '')
   // NOUVEAU : fournisseur assigné au produit
   const [fournisseurId, setFournisseurId] = useState<number | ''>(product?.fournisseur_id || '')
-  // MODIFIÉ : en édition, les champs stock démarrent vides (saisie = delta à ajouter OU retirer, ex : -3)
+  //  : en édition, les champs stock démarrent vides (saisie = delta à ajouter OU retirer, ex : -3)
   const [stockBoutique, setStockBoutique] = useState(product ? '' : '0')
   const [stockEntrepot, setStockEntrepot] = useState(product ? '' : '0')
   const [codeBarre, setCodeBarre] = useState(product?.code_barre || '')
@@ -59,10 +59,10 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
       }
 
       if (isEdit && product) {
-        // MODIFIÉ : le stock saisi est un delta signé — on peut ajouter (+5) ou retirer (-3) du stock
+        //  : le stock saisi est un delta signé — on peut ajouter (+5) ou retirer (-3) du stock
         const newStockBoutique = product.stock_boutique + sbNum
         const newStockEntrepot = product.stock_entrepot + seNum
-        // MODIFIÉ : garde anti-négatif — refuse le retrait si le stock est insuffisant
+        //  : garde anti-négatif — refuse le retrait si le stock est insuffisant
         if (newStockBoutique < 0)
           throw new Error(
             `Stock boutique insuffisant pour ce retrait (disponible : ${product.stock_boutique})`
@@ -168,7 +168,7 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
                 type="number"
                 value={stockBoutique}
                 onChange={(e) => setStockBoutique(e.target.value)}
-                // MODIFIÉ : en édition, min à -stock actuel pour autoriser le retrait (ex : -3)
+                //  : en édition, min à -stock actuel pour autoriser le retrait (ex : -3)
                 min={isEdit ? -(product?.stock_boutique ?? 0) : '0'}
                 placeholder={isEdit ? 'Ex : 5 ou -3' : '0'}
               />
@@ -183,7 +183,7 @@ export default function ProductForm({ product, onClose, onSaved }: ProductFormPr
                 type="number"
                 value={stockEntrepot}
                 onChange={(e) => setStockEntrepot(e.target.value)}
-                // MODIFIÉ : en édition, min à -stock actuel pour autoriser le retrait (ex : -3)
+                //  : en édition, min à -stock actuel pour autoriser le retrait (ex : -3)
                 min={isEdit ? -(product?.stock_entrepot ?? 0) : '0'}
                 placeholder={isEdit ? 'Ex : 5 ou -3' : '0'}
               />

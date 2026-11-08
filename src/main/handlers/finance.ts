@@ -1,7 +1,7 @@
 import { IpcMain } from 'electron'
 import Database from 'better-sqlite3'
 
-// NOUVEAU : helpers de date locale (fuseau du process = Indian/Antananarivo)
+//  : helpers de date locale (fuseau du process = Indian/Antananarivo)
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
@@ -35,7 +35,7 @@ interface JournalResult {
   depenses: number
 }
 
-// NOUVEAU : ligne d'historique des transferts vers la banque
+//  : ligne d'historique des transferts vers la banque
 interface DepotRow {
   id: number
   date: string
@@ -43,7 +43,7 @@ interface DepotRow {
   created_by: string | null
 }
 
-// NOUVEAU : calcule les soldes globaux espèce / banque / total
+//  : calcule les soldes globaux espèce / banque / total
 function computeCaisse(db: Database.Database): CaisseTotals {
   const recettes = db
     .prepare(`SELECT COALESCE(SUM(total - remise), 0) as total FROM sales WHERE status = 'paid'`)
@@ -57,6 +57,10 @@ function computeCaisse(db: Database.Database): CaisseTotals {
     total: number
   }
 
+  const apportsParMode = db
+    .prepare(`SELECT mode, COALESCE(SUM(montant), 0) as total FROM apports_externes GROUP BY mode`)
+    .all() as { mode: 'espece' | 'banque'; total: number }[]
+
   let depensesEspece = 0
   let depensesBanque = 0
   for (const d of depensesParMode) {
@@ -64,13 +68,20 @@ function computeCaisse(db: Database.Database): CaisseTotals {
     else depensesEspece += d.total
   }
 
-  const espece = round2(recettes.total - depensesEspece - depots.total)
-  const banque = round2(depots.total - depensesBanque)
+  let apportsEspece = 0
+  let apportsBanque = 0
+  for (const a of apportsParMode) {
+    if (a.mode === 'banque') apportsBanque += a.total
+    else apportsEspece += a.total
+  }
+
+  const espece = round2(recettes.total - depensesEspece - depots.total + apportsEspece)
+  const banque = round2(depots.total - depensesBanque + apportsBanque)
 
   return { espece, banque, total: round2(espece + banque) }
 }
 
-// NOUVEAU : fige en base la recette de chaque journée terminée (une seule ligne par date)
+//  : fige en base la recette de chaque journée terminée (une seule ligne par date)
 export function syncRecettesJournalieres(
   db: Database.Database,
   today: string = localDate(new Date())
@@ -90,7 +101,7 @@ export function syncRecettesJournalieres(
   ).run(today)
 }
 
-// NOUVEAU : rattrapage au démarrage + figement automatique à minuit
+//  : rattrapage au démarrage + figement automatique à minuit
 export function startFinanceScheduler(db: Database.Database): void {
   try {
     syncRecettesJournalieres(db)
@@ -112,13 +123,13 @@ export function startFinanceScheduler(db: Database.Database): void {
   timer.unref?.()
 }
 
-// NOUVEAU : journal mensuel = recettes journalières + dépenses (les transferts en sont exclus)
+//  : journal mensuel = recettes journalières + dépenses (les transferts en sont exclus)
 function getJournal(db: Database.Database, year: number, month: number): JournalResult {
   const startDate = `${year}-${pad2(month + 1)}-01`
   const lastDay = new Date(year, month + 1, 0).getDate()
   const endDate = `${year}-${pad2(month + 1)}-${pad2(lastDay)}`
 
-  // NOUVEAU : rattrape les journées terminées non encore figées
+  //  : rattrape les journées terminées non encore figées
   syncRecettesJournalieres(db)
 
   const recettes = db
@@ -130,7 +141,7 @@ function getJournal(db: Database.Database, year: number, month: number): Journal
     )
     .all(startDate, endDate) as { date: string; montant: number }[]
 
-  // NOUVEAU : ligne du jour en direct, figée seulement au passage de minuit
+  //  : ligne du jour en direct, figée seulement au passage de minuit
   // (garde anti-doublon si la date du jour a déjà été figée)
   const today = localDate(new Date())
   const hasToday = recettes.some((r) => r.date === today)
@@ -160,6 +171,21 @@ function getJournal(db: Database.Database, year: number, month: number): Journal
     mode: 'espece' | 'banque'
   }[]
 
+  const apports = db
+    .prepare(
+      `SELECT id, date, motif, montant, mode
+       FROM apports_externes
+       WHERE date BETWEEN ? AND ?
+       ORDER BY date ASC, id ASC`
+    )
+    .all(startDate, endDate) as {
+    id: number
+    date: string
+    motif: string
+    montant: number
+    mode: 'espece' | 'banque'
+  }[]
+
   const rows = [
     ...recettes.map((r) => ({
       key: `revenue-${r.date}`,
@@ -168,6 +194,14 @@ function getJournal(db: Database.Database, year: number, month: number): Journal
       element: 'Recette journalière',
       montant: round2(r.montant),
       ref_id: null
+    })),
+    ...apports.map((a) => ({
+      key: `apport-${a.id}`,
+      date: a.date,
+      type: 'revenue' as const,
+      element: `Apport externe: ${a.motif} (${a.mode === 'banque' ? 'banque' : 'espèces'})`,
+      montant: round2(a.montant),
+      ref_id: a.id
     })),
     ...depenses.map((d) => ({
       key: `depense-${d.id}`,
@@ -193,7 +227,7 @@ function getJournal(db: Database.Database, year: number, month: number): Journal
   }
 }
 
-// NOUVEAU : historique complet des transferts vers la banque
+//  : historique complet des transferts vers la banque
 function getDepots(db: Database.Database): DepotRow[] {
   return db
     .prepare(
@@ -253,7 +287,7 @@ export function registerFinanceHandlers(ipcMain: IpcMain, db: Database.Database)
   )
 
   ipcMain.handle('finance:deleteDepense', (_event, id: number) => {
-    // NOUVEAU : une dépense générée par un paiement fournisseur ne doit pas être supprimée à la main
+    //  : une dépense générée par un paiement fournisseur ne doit pas être supprimée à la main
     const linked = db.prepare('SELECT 1 FROM paiements_fournisseurs WHERE depense_id = ?').get(id)
     if (linked) {
       throw new Error('Dépense liée à un paiement fournisseur : suppression interdite')
@@ -265,13 +299,51 @@ export function registerFinanceHandlers(ipcMain: IpcMain, db: Database.Database)
   })
 
   ipcMain.handle(
+    'finance:addApport',
+    (
+      _event,
+      {
+        motif,
+        montant,
+        mode,
+        createdBy
+      }: {
+        motif: string
+        montant: number
+        mode: 'espece' | 'banque'
+        createdBy?: string
+      }
+    ) => {
+      const motifClean = String(motif || '').trim()
+      const montantNum = round2(Number(montant))
+      if (!motifClean) throw new Error('Le motif est requis')
+      if (!Number.isFinite(montantNum) || montantNum <= 0)
+        throw new Error('Le montant doit être un nombre positif')
+      if (mode !== 'espece' && mode !== 'banque') throw new Error('Mode de paiement invalide')
+
+      return db
+        .prepare(
+          `INSERT INTO apports_externes (date, motif, montant, mode, created_by)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .run(localDate(new Date()), motifClean, round2(montantNum), mode, createdBy || null)
+    }
+  )
+
+  ipcMain.handle('finance:deleteApport', (_event, id: number) => {
+    const result = db.prepare('DELETE FROM apports_externes WHERE id = ?').run(id)
+    if (result.changes === 0) throw new Error('Apport introuvable')
+    return { success: true }
+  })
+
+  ipcMain.handle(
     'finance:addDepot',
     (_event, { montant, createdBy }: { montant: number; createdBy?: string }) => {
       const montantNum = round2(Number(montant))
       if (!Number.isFinite(montantNum) || montantNum <= 0)
         throw new Error('Le montant doit être un nombre positif')
 
-      // NOUVEAU : transaction pour vérifier le solde et insérer de façon atomique
+      //  : transaction pour vérifier le solde et insérer de façon atomique
       const depot = db.transaction(() => {
         const caisse = computeCaisse(db)
         if (montantNum > caisse.espece) {

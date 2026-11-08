@@ -38,7 +38,7 @@ export function registerFournisseurHandlers(ipcMain: IpcMain, db: Database.Datab
   )
 
   ipcMain.handle('fournisseurs:delete', (_event, id: number) => {
-    // NOUVEAU : on interdit la suppression d'un fournisseur qui a des livraisons (historique comptable)
+    //  : on interdit la suppression d'un fournisseur qui a des livraisons (historique comptable)
     const row = db
       .prepare('SELECT COUNT(*) AS count FROM livraisons WHERE fournisseur_id = ?')
       .get(id) as { count: number }

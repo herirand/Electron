@@ -66,7 +66,7 @@ interface FournisseurProduit {
   produit_nom: string
 }
 
-// NOUVEAU : livraisons / paiement fournisseur
+//  : livraisons / paiement fournisseur
 interface Livraison {
   id: number
   fournisseur_id: number
@@ -143,7 +143,7 @@ interface FinanceJournal {
   depenses: number
 }
 
-// NOUVEAU : historique des transferts vers la banque
+//  : historique des transferts vers la banque
 interface FinanceDepot {
   id: number
   date: string
@@ -288,6 +288,13 @@ interface CashierAPI {
     createdBy?: string
   }): Promise<{ lastInsertRowid: number }>
   deleteFinanceDepense(id: number): Promise<{ success: boolean }>
+  addFinanceApport(data: {
+    motif: string
+    montant: number
+    mode: 'espece' | 'banque'
+    createdBy?: string
+  }): Promise<{ lastInsertRowid: number }>
+  deleteFinanceApport(id: number): Promise<{ success: boolean }>
   addFinanceDepot(data: { montant: number; createdBy?: string }): Promise<{ success: boolean }>
   getCredits(page?: number, limit?: number): Promise<Sale[]>
   payCredit(saleId: number, validatedBy: string): Promise<{ success: boolean }>

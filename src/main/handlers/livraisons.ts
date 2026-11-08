@@ -1,7 +1,7 @@
 import { IpcMain } from 'electron'
 import Database from 'better-sqlite3'
 
-// NOUVEAU : filtres de la liste des livraisons fournisseurs
+//  : filtres de la liste des livraisons fournisseurs
 interface LivraisonFilters {
   fournisseurId?: number
   statut?: 'impayee' | 'payee'
@@ -24,7 +24,7 @@ function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
 
-// NOUVEAU : dates locales (fuseau du process = Indian/Antananarivo)
+//  : dates locales (fuseau du process = Indian/Antananarivo)
 function localDate(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
@@ -68,7 +68,7 @@ function assertFournisseur(db: Database.Database, fournisseurId: number): void {
   if (!row) throw new Error('Fournisseur introuvable')
 }
 
-// NOUVEAU : service complet livraisons / paiement fournisseur
+//  : service complet livraisons / paiement fournisseur
 export function registerLivraisonHandlers(ipcMain: IpcMain, db: Database.Database): void {
   ipcMain.handle('livraisons:getAll', (_event, filters: LivraisonFilters = {}) => {
     const where: string[] = []
@@ -228,7 +228,7 @@ export function registerLivraisonHandlers(ipcMain: IpcMain, db: Database.Databas
     return { success: true }
   })
 
-  // NOUVEAU : paiement total + sortie de caisse dans une transaction atomique
+  //  : paiement total + sortie de caisse dans une transaction atomique
   ipcMain.handle(
     'livraisons:payer',
     (_event, payload: { id: number; mode?: 'espece' | 'banque'; paidBy?: string }) => {

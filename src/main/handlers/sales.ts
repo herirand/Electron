@@ -27,7 +27,7 @@ function parseSalesRows(rows: Array<Record<string, unknown>>): Array<Record<stri
   })
 }
 
-// NOUVEAU : horodatage au fuseau Antananarivo (UTC+3, sans DST) — le format
+//  : horodatage au fuseau Antananarivo (UTC+3, sans DST) — le format
 // « YYYY-MM-DD HH:MM:SS » est stocké en local et parsé en local par le renderer
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
@@ -107,7 +107,7 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
 
         const sale = db
           .prepare(
-            // MODIFIÉ : created_at renseigné en heure Antananarivo (au lieu du défaut UTC)
+            //  : created_at renseigné en heure Antananarivo (au lieu du défaut UTC)
             `INSERT INTO sales (total, benefice, cashier, client_id, status, client_name, created_by, was_credit, remise, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
@@ -159,13 +159,13 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
         amountReceived,
         change,
         remise || 0,
-        // MODIFIÉ : mention « À CRÉDIT » sur le ticket des ventes à crédit
+        //  : mention « À CRÉDIT » sur le ticket des ventes à crédit
         !!isCredit
       )
       writeFileSync(join(ticketsDir, `vente_${result.saleId}.txt`), ticket, 'utf-8')
 
       if (!isCredit) {
-        // MODIFIÉ : date du jour selon le fuseau Antananarivo (et non UTC)
+        //  : date du jour selon le fuseau Antananarivo (et non UTC)
         updateJournalier(db, localDate(new Date()))
       }
 
@@ -190,7 +190,7 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
   )
 
   ipcMain.handle('sales:getToday', () => {
-    // MODIFIÉ : date du jour selon le fuseau Antananarivo (et non UTC)
+    //  : date du jour selon le fuseau Antananarivo (et non UTC)
     const today = localDate(new Date())
     const rows = db
       .prepare(
@@ -219,7 +219,7 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
     'journalier:getByMonth',
     (_event, { year, month }: { year: number; month: number }) => {
       const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
-      // MODIFIÉ : dernier jour du mois construit en heure locale —
+      //  : dernier jour du mois construit en heure locale —
       // toISOString() (UTC) décale d'un jour pour les fuseaux à l'est de l'UTC (ex: Madagascar UTC+3)
       const lastDay = new Date(year, month + 1, 0).getDate()
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
@@ -253,7 +253,7 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
 
   ipcMain.handle(
     'sales:getCredits',
-    // MODIFIÉ : limite par défaut illimitée (-1) pour ne pas cacher les vieux crédits
+    //  : limite par défaut illimitée (-1) pour ne pas cacher les vieux crédits
     (_event, { page = 0, limit = -1 }: { page?: number; limit?: number } = {}) => {
       const offset = page * (limit > 0 ? limit : 0)
       const rows = db
@@ -272,17 +272,17 @@ export function registerSalesHandlers(ipcMain: IpcMain, db: Database.Database): 
   ipcMain.handle(
     'sales:payCredit',
     (_event, { saleId, validatedBy }: { saleId: number; validatedBy: string }) => {
-      // MODIFIÉ : garde idempotence — seul un crédit non encore payé peut être encaissé
+      //  : garde idempotence — seul un crédit non encore payé peut être encaissé
       const result = db
         .prepare(
-          // MODIFIÉ : paid_at en heure Antananarivo (au lieu de CURRENT_TIMESTAMP UTC)
+          //  : paid_at en heure Antananarivo (au lieu de CURRENT_TIMESTAMP UTC)
           `UPDATE sales SET status = 'paid', paid_at = ?, validated_by = ?
            WHERE id = ? AND status = 'credit' AND was_credit = 1`
         )
         .run(localDateTime(new Date()), validatedBy, saleId)
       if (result.changes === 0) throw new Error('Vente introuvable ou déjà payée')
 
-      // MODIFIÉ : date du jour selon le fuseau Antananarivo (et non UTC)
+      //  : date du jour selon le fuseau Antananarivo (et non UTC)
       const today = localDate(new Date())
       updateJournalier(db, today)
 
@@ -298,7 +298,7 @@ function updateJournalier(db: Database.Database, date: string): void {
         COALESCE(SUM(total), 0) as total_ventes,
         COALESCE(SUM(benefice), 0) as benefice
        FROM sales
-       -- MODIFIÉ : compté au jour du paiement pour les crédits (paid_at), à la création sinon
+       --  : compté au jour du paiement pour les crédits (paid_at), à la création sinon
        WHERE status = 'paid' AND date(COALESCE(paid_at, created_at)) = ?`
     )
     .get(date) as { total_ventes: number; benefice: number }

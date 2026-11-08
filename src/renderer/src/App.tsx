@@ -7,7 +7,7 @@ import SalesHistory from './components/SalesHistory'
 import Finance from './components/Finance'
 import './styles/pos.css'
 
-// MODIFIÉ : ajout de la page finance
+//  : ajout de la page finance
 type Page = 'caisse' | 'credits' | 'admin' | 'sales' | 'finance'
 
 export default function App() {

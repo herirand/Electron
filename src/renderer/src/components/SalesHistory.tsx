@@ -77,7 +77,7 @@ export default function SalesHistory() {
 
   const loading = loadedMonth !== monthKey
   const dayLoading = selectedDate !== null && dayDate !== selectedDate
-  // MODIFIÉ : ne lister que les ventes encaissées — cohérent avec le total du calendrier (journalier)
+  //  : ne lister que les ventes encaissées — cohérent avec le total du calendrier (journalier)
   const paidSales = daySales.filter((s) => s.status === 'paid')
 
   const daysByDate = useMemo(

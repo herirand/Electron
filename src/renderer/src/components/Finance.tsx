@@ -29,7 +29,7 @@ function formatMontant(value: number): string {
   return `${value.toLocaleString()} Ar`
 }
 
-type ModalKind = 'expense'
+type ModalKind = 'expense' | 'apport'
 
 interface FinanceProps {
   user: User
@@ -64,7 +64,7 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
   // NOUVEAU : chargement parallèle du journal, de la caisse et des transferts
   const fetchAll = useCallback(
     (): Promise<[FinanceJournal, FinanceCaisse, FinanceDepot[]]> =>
-      // MODIFIÉ : l'API attend un mois 0-based, alors que l'état local est 1-based
+      //  : l'API attend un mois 0-based, alors que l'état local est 1-based
       Promise.all([
         window.api.getFinanceJournal(year, month - 1),
         window.api.getFinanceCaisse(),
@@ -145,13 +145,18 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
     showToast('success', msg)
   }
 
-  const handleDeleteDepense = async (row: FinanceJournalRow): Promise<void> => {
+  const handleDeleteRow = async (row: FinanceJournalRow): Promise<void> => {
     if (row.ref_id === null) return
-    if (!confirm('Supprimer cette dépense ?')) return
+    const isDepense = row.type === 'depense'
+    if (!confirm(`Supprimer cette ${isDepense ? 'dépense' : 'apport'} ?`)) return
     try {
-      await window.api.deleteFinanceDepense(row.ref_id)
+      if (isDepense) {
+        await window.api.deleteFinanceDepense(row.ref_id)
+      } else {
+        await window.api.deleteFinanceApport(row.ref_id)
+      }
       await reloadData()
-      showToast('success', 'Dépense supprimée')
+      showToast('success', `${isDepense ? 'Dépense' : 'Apport'} supprimé`)
     } catch (err) {
       showToast('error', getErrorMsg(err, 'Erreur lors de la suppression'))
     }
@@ -241,6 +246,9 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
             <button className="btn-add" onClick={() => setModal('expense')}>
               Nouvelle dépense
             </button>
+            <button className="btn-add" onClick={() => setModal('apport')}>
+              Nouvel apport
+            </button>
           </div>
 
           <table className="admin-table">
@@ -268,7 +276,16 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
                         <button
                           className="btn-delete"
                           style={{ marginLeft: 10, padding: '4px 10px', fontSize: 12 }}
-                          onClick={() => handleDeleteDepense(row)}
+                          onClick={() => handleDeleteRow(row)}
+                        >
+                          Supprimer
+                        </button>
+                      )}
+                      {!isDepense && row.type === 'revenue' && row.ref_id !== null && (
+                        <button
+                          className="btn-delete"
+                          style={{ marginLeft: 10, padding: '4px 10px', fontSize: 12 }}
+                          onClick={() => handleDeleteRow(row)}
                         >
                           Supprimer
                         </button>
@@ -419,6 +436,9 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
       {modal === 'expense' && (
         <ExpenseModal user={user} onClose={() => setModal(null)} onSaved={handleSaved} />
       )}
+      {modal === 'apport' && (
+        <ApportModal user={user} onClose={() => setModal(null)} onSaved={handleSaved} />
+      )}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
@@ -473,6 +493,103 @@ function ExpenseModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>Nouvelle dépense</h3>
+        {error && (
+          <div className="error-msg" style={{ marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Motif</label>
+            <input
+              type="text"
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+              autoFocus
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Montant (Ar)</label>
+            <input
+              type="number"
+              value={montant}
+              onChange={(e) => setMontant(e.target.value)}
+              min={1}
+              step={1}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Mode de paiement</label>
+            <select value={mode} onChange={(e) => setMode(e.target.value as 'espece' | 'banque')}>
+              <option value="espece">Espèce</option>
+              <option value="banque">Banque</option>
+            </select>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onClose}>
+              Annuler
+            </button>
+            <button type="submit" className="btn-primary" disabled={loading}>
+              {loading ? 'Enregistrement...' : 'Enregistrer'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// NOUVEAU : modale de création d'un apport externe (augmente le solde)
+function ApportModal({
+  user,
+  onClose,
+  onSaved
+}: {
+  user: User
+  onClose: () => void
+  onSaved: (msg: string) => void
+}): React.JSX.Element {
+  const [motif, setMotif] = useState('')
+  const [montant, setMontant] = useState('')
+  const [mode, setMode] = useState<'espece' | 'banque'>('espece')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault()
+    if (loading) return
+    const value = Number(montant)
+    if (!motif.trim()) {
+      setError('Le motif est obligatoire.')
+      return
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      setError('Le montant doit être supérieur à 0.')
+      return
+    }
+    setError('')
+    setLoading(true)
+    try {
+      await window.api.addFinanceApport({
+        motif: motif.trim(),
+        montant: value,
+        mode,
+        createdBy: user.username
+      })
+      onSaved('Apport enregistré')
+    } catch (err) {
+      setError(getErrorMsg(err, "Erreur lors de l'enregistrement"))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Nouvel apport externe</h3>
         {error && (
           <div className="error-msg" style={{ marginBottom: 12 }}>
             {error}
