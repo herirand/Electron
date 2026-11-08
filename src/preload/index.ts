@@ -151,7 +151,9 @@ const api = {
   }) => ipcRenderer.invoke('finance:addApport', data),
   deleteFinanceApport: (id: number) => ipcRenderer.invoke('finance:deleteApport', id),
   addFinanceDepot: (data: { montant: number; createdBy?: string }) =>
-    ipcRenderer.invoke('finance:addDepot', data)
+    ipcRenderer.invoke('finance:addDepot', data),
+  changeUserPassword: (id: number, newPassword: string) =>
+    ipcRenderer.invoke('auth:changePassword', { id, newPassword })
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -296,6 +296,7 @@ interface CashierAPI {
   }): Promise<{ lastInsertRowid: number }>
   deleteFinanceApport(id: number): Promise<{ success: boolean }>
   addFinanceDepot(data: { montant: number; createdBy?: string }): Promise<{ success: boolean }>
+  changeUserPassword(id: number, newPassword: string): Promise<{ success: boolean }>
   getCredits(page?: number, limit?: number): Promise<Sale[]>
   payCredit(saleId: number, validatedBy: string): Promise<{ success: boolean }>
   openTicketsFolder(): Promise<void>

@@ -44,4 +44,16 @@ export function registerAuthHandlers(ipcMain: IpcMain, db: Database.Database): v
     db.prepare('DELETE FROM users WHERE id = ?').run(id)
     return { success: true }
   })
+
+  ipcMain.handle(
+    'auth:changePassword',
+    (_event, { id, newPassword }: { id: number; newPassword: string }) => {
+      if (!newPassword || newPassword.length < 4)
+        throw new Error('Le mot de passe doit faire au moins 4 caractères')
+      const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id)
+      if (!user) throw new Error('Utilisateur introuvable')
+      db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashPassword(newPassword), id)
+      return { success: true }
+    }
+  )
 }

@@ -33,6 +33,12 @@ export default function Admin() {
   const [showCategoryForm, setShowCategoryForm] = useState<Famille | null | 'new'>(null)
   const [showClientForm, setShowClientForm] = useState<Client | null | 'new'>(null)
   const [showFournisseurForm, setShowFournisseurForm] = useState<Fournisseur | null | 'new'>(null)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordUserId, setPasswordUserId] = useState<number | null>(null)
+  const [passwordUserName, setPasswordUserName] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const [productPage, setProductPage] = useState(0)
   const PAGE_SIZE = 50
@@ -99,6 +105,34 @@ export default function Admin() {
       loadUsers()
     } catch (err) {
       showToast('error', getErrorMsg(err, 'Erreur lors de la suppression'))
+    }
+  }
+
+  const handleChangePassword = async (user: User) => {
+    setPasswordUserId(user.id)
+    setPasswordUserName(user.username)
+    setNewPassword('')
+    setPasswordError('')
+    setShowPasswordModal(true)
+  }
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (passwordLoading) return
+    if (!newPassword || newPassword.length < 4) {
+      setPasswordError('Le mot de passe doit faire au moins 4 caractères')
+      return
+    }
+    setPasswordError('')
+    setPasswordLoading(true)
+    try {
+      await window.api.changeUserPassword(passwordUserId!, newPassword)
+      showToast('success', `Mot de passe de "${passwordUserName}" modifié`)
+      setShowPasswordModal(false)
+    } catch (err) {
+      setPasswordError(getErrorMsg(err, 'Erreur lors du changement de mot de passe'))
+    } finally {
+      setPasswordLoading(false)
     }
   }
 
@@ -380,6 +414,7 @@ export default function Admin() {
                 <th>ID</th>
                 <th>Nom</th>
                 <th>Rôle</th>
+                <th>Mot de passe</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -394,6 +429,15 @@ export default function Admin() {
                     <span className={`role-badge role-${u.role}`}>
                       {u.role === 'admin' ? 'Admin' : 'Caissier'}
                     </span>
+                  </td>
+                  <td>
+                    <button
+                      className="btn-edit"
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                      onClick={() => handleChangePassword(u)}
+                    >
+                      Changer mdp
+                    </button>
                   </td>
                   <td>
                     {u.role !== 'admin' && (
@@ -427,6 +471,40 @@ export default function Admin() {
             />
           )}
         </>
+      )}
+
+      {showPasswordModal && (
+        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Changer le mot de passe de "{passwordUserName}"</h3>
+            {passwordError && (
+              <div className="error-msg" style={{ marginBottom: 12 }}>
+                {passwordError}
+              </div>
+            )}
+            <form onSubmit={handleSavePassword}>
+              <div className="form-group">
+                <label>Nouveau mot de passe</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoFocus
+                  minLength={4}
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setShowPasswordModal(false)}>
+                  Annuler
+                </button>
+                <button type="submit" className="btn-primary" disabled={passwordLoading}>
+                  {passwordLoading ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {showCategoryForm && (

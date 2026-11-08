@@ -44,6 +44,8 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
   const [depots, setDepots] = useState<FinanceDepot[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<ModalKind | null>(null)
+  const [modalKey, setModalKey] = useState(0)
+  const [confirmDeleteRow, setConfirmDeleteRow] = useState<FinanceJournalRow | null>(null)
   const [tab, setTab] = useState<'journal' | 'transfert'>('journal')
   // NOUVEAU : saisie directe du transfert dans la section Transfert
   const [transferAmount, setTransferAmount] = useState('')
@@ -147,19 +149,32 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
 
   const handleDeleteRow = async (row: FinanceJournalRow): Promise<void> => {
     if (row.ref_id === null) return
+    const refId = row.ref_id
+    setConfirmDeleteRow({ ...row, ref_id: refId })
+  }
+
+  const handleConfirmDelete = async (): Promise<void> => {
+    if (!confirmDeleteRow) return
+    const row = confirmDeleteRow
+    const refId = row.ref_id
+    if (refId === null) return
+    setConfirmDeleteRow(null)
     const isDepense = row.type === 'depense'
-    if (!confirm(`Supprimer cette ${isDepense ? 'dépense' : 'apport'} ?`)) return
     try {
       if (isDepense) {
-        await window.api.deleteFinanceDepense(row.ref_id)
+        await window.api.deleteFinanceDepense(refId)
       } else {
-        await window.api.deleteFinanceApport(row.ref_id)
+        await window.api.deleteFinanceApport(refId)
       }
       await reloadData()
       showToast('success', `${isDepense ? 'Dépense' : 'Apport'} supprimé`)
     } catch (err) {
       showToast('error', getErrorMsg(err, 'Erreur lors de la suppression'))
     }
+  }
+
+  const handleCancelDelete = (): void => {
+    setConfirmDeleteRow(null)
   }
 
   // NOUVEAU : valide et enregistre le transfert directement depuis la section
@@ -243,10 +258,10 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
             }}
           >
             <h3 style={{ fontSize: 16, color: 'var(--text-secondary)' }}>Transactions du mois</h3>
-            <button className="btn-add" onClick={() => setModal('expense')}>
+            <button className="btn-add" onClick={() => { setModalKey(k => k + 1); setModal('expense') }}>
               Nouvelle dépense
             </button>
-            <button className="btn-add" onClick={() => setModal('apport')}>
+            <button className="btn-add" onClick={() => { setModalKey(k => k + 1); setModal('apport') }}>
               Nouvel apport
             </button>
           </div>
@@ -434,10 +449,39 @@ export default function Finance({ user }: FinanceProps): React.JSX.Element {
       )}
 
       {modal === 'expense' && (
-        <ExpenseModal user={user} onClose={() => setModal(null)} onSaved={handleSaved} />
+        <ExpenseModal
+          key={modalKey}
+          user={user}
+          onClose={() => setModal(null)}
+          onSaved={handleSaved}
+        />
       )}
       {modal === 'apport' && (
-        <ApportModal user={user} onClose={() => setModal(null)} onSaved={handleSaved} />
+        <ApportModal
+          key={modalKey}
+          user={user}
+          onClose={() => setModal(null)}
+          onSaved={handleSaved}
+        />
+      )}
+      {confirmDeleteRow && (
+        <div className="modal-overlay" onClick={handleCancelDelete}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Confirmer la suppression</h3>
+            <p>
+              Voulez-vous vraiment supprimer cette{' '}
+              {confirmDeleteRow.type === 'depense' ? 'dépense' : 'apport'} ?
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn-secondary" onClick={handleCancelDelete}>
+                Annuler
+              </button>
+              <button type="button" className="btn-danger" onClick={handleConfirmDelete}>
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
@@ -459,6 +503,11 @@ function ExpenseModal({
   const [mode, setMode] = useState<'espece' | 'banque'>('espece')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const motifRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    motifRef.current?.focus()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -502,19 +551,26 @@ function ExpenseModal({
           <div className="form-group">
             <label>Motif</label>
             <input
+              ref={motifRef}
               type="text"
               value={motif}
-              onChange={(e) => setMotif(e.target.value)}
-              autoFocus
+              onChange={(e) => {
+                setError('')
+                setMotif(e.target.value)
+              }}
               required
             />
           </div>
           <div className="form-group">
             <label>Montant (Ar)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={montant}
-              onChange={(e) => setMontant(e.target.value)}
+              onChange={(e) => {
+                setError('')
+                setMontant(e.target.value.replace(/[^0-9]/g, ''))
+              }}
               min={1}
               step={1}
               required
@@ -556,6 +612,11 @@ function ApportModal({
   const [mode, setMode] = useState<'espece' | 'banque'>('espece')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const motifRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    motifRef.current?.focus()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault()
@@ -599,19 +660,26 @@ function ApportModal({
           <div className="form-group">
             <label>Motif</label>
             <input
+              ref={motifRef}
               type="text"
               value={motif}
-              onChange={(e) => setMotif(e.target.value)}
-              autoFocus
+              onChange={(e) => {
+                setError('')
+                setMotif(e.target.value)
+              }}
               required
             />
           </div>
           <div className="form-group">
             <label>Montant (Ar)</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={montant}
-              onChange={(e) => setMontant(e.target.value)}
+              onChange={(e) => {
+                setError('')
+                setMontant(e.target.value.replace(/[^0-9]/g, ''))
+              }}
               min={1}
               step={1}
               required
